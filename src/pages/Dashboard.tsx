@@ -116,7 +116,11 @@ export default function Dashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="w-full" variant="outline">
+                <Button 
+                  className="w-full" 
+                  variant="outline"
+                  onClick={() => window.location.href = '/contas'}
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   Gerenciar Contas
                 </Button>
