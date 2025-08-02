@@ -1,11 +1,14 @@
 import { useAuth } from '@/hooks/useAuth';
+import { useCasal } from '@/hooks/useCasal';
 import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Heart, LogOut, Plus, TrendingUp, Wallet, Target } from 'lucide-react';
+import PartnerInvite from '@/components/PartnerInvite';
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
+  const { casal, refetch: refetchCasal } = useCasal();
 
   if (!user) {
     return <Navigate to="/auth" replace />;
@@ -87,23 +90,7 @@ export default function Dashboard() {
 
           {/* Setup Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Card className="cursor-pointer hover:shadow-md transition-shadow">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-primary" />
-                  Conectar Parceiro
-                </CardTitle>
-                <CardDescription>
-                  Convide seu parceiro para gerenciar as finanças juntos
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button className="w-full">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Enviar Convite
-                </Button>
-              </CardContent>
-            </Card>
+            <PartnerInvite casal={casal} onPartnerConnected={refetchCasal} />
 
             <Card className="cursor-pointer hover:shadow-md transition-shadow">
               <CardHeader>
