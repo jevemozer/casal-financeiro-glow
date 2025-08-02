@@ -345,7 +345,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_default_categories: {
+        Args: { casal_uuid: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
