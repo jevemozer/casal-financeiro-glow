@@ -5,22 +5,43 @@ import { useTransacoes } from '@/hooks/useTransacoes';
 import { useMetas } from '@/hooks/useMetas';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Heart, LogOut, Plus, TrendingUp, Wallet, Target, ArrowRight, Clock, PiggyBank } from 'lucide-react';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Heart,
+  LogOut,
+  Plus,
+  TrendingUp,
+  Wallet,
+  Target,
+  ArrowRight,
+  Clock,
+  PiggyBank,
+} from 'lucide-react';
 import PartnerInvite from '@/components/PartnerInvite';
+import { Notifications } from '@/components/Notifications';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { casal, refetch: refetchCasal } = useCasal();
   const { saldoTotal, loading: loadingContas } = useContas();
-  const { gastosMes, transacoes, loading: loadingTransacoes } = useTransacoes(5);
+  const {
+    gastosMes,
+    transacoes,
+    loading: loadingTransacoes,
+  } = useTransacoes(5);
   const { metasAtivas, loading: loadingMetas } = useMetas();
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
-      currency: 'BRL'
+      currency: 'BRL',
     }).format(value);
   };
 
@@ -41,8 +62,9 @@ export default function Dashboard() {
             <Heart className="h-6 w-6 text-primary" />
             <h1 className="text-xl font-bold">CasalFinance</h1>
           </div>
-          
+
           <div className="flex items-center gap-4">
+            <Notifications />
             <span className="text-sm text-muted-foreground">
               Olá, {user.user_metadata?.full_name || user.email}
             </span>
@@ -68,7 +90,9 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Saldo Total</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Saldo Total
+                </CardTitle>
                 <Wallet className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -76,14 +100,18 @@ export default function Dashboard() {
                   {loadingContas ? '...' : formatCurrency(saldoTotal)}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {saldoTotal === 0 ? 'Adicione suas contas para ver o saldo' : 'Saldo atual de todas as contas'}
+                  {saldoTotal === 0
+                    ? 'Adicione suas contas para ver o saldo'
+                    : 'Saldo atual de todas as contas'}
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Gastos do Mês</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Gastos do Mês
+                </CardTitle>
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -91,22 +119,31 @@ export default function Dashboard() {
                   {loadingTransacoes ? '...' : formatCurrency(gastosMes)}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {gastosMes === 0 ? 'Registre transações para ver os gastos' : 'Gastos realizados este mês'}
+                  {gastosMes === 0
+                    ? 'Registre transações para ver os gastos'
+                    : 'Gastos realizados este mês'}
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Metas Ativas</CardTitle>
-                <Target className="h-4 w-4 text-muted-foreground cursor-pointer" onClick={() => navigate('/metas')} />
+                <CardTitle className="text-sm font-medium">
+                  Metas Ativas
+                </CardTitle>
+                <Target
+                  className="h-4 w-4 text-muted-foreground cursor-pointer"
+                  onClick={() => navigate('/metas')}
+                />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
                   {loadingMetas ? '...' : metasAtivas}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {metasAtivas === 0 ? 'Crie metas para alcançar seus objetivos' : 'Metas ativas em andamento'}
+                  {metasAtivas === 0
+                    ? 'Crie metas para alcançar seus objetivos'
+                    : 'Metas ativas em andamento'}
                 </p>
               </CardContent>
             </Card>
@@ -127,8 +164,8 @@ export default function Dashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button 
-                  className="w-full" 
+                <Button
+                  className="w-full"
                   variant="outline"
                   onClick={() => navigate('/contas')}
                 >
@@ -149,8 +186,8 @@ export default function Dashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button 
-                  className="w-full" 
+                <Button
+                  className="w-full"
                   variant="outline"
                   onClick={() => navigate('/orcamentos')}
                 >
@@ -171,8 +208,8 @@ export default function Dashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button 
-                  className="w-full" 
+                <Button
+                  className="w-full"
                   variant="outline"
                   onClick={() => navigate('/transacoes')}
                 >
@@ -188,11 +225,15 @@ export default function Dashboard() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div>
-                  <CardTitle className="text-lg font-semibold">Transações Recentes</CardTitle>
-                  <CardDescription>Últimas movimentações financeiras</CardDescription>
+                  <CardTitle className="text-lg font-semibold">
+                    Transações Recentes
+                  </CardTitle>
+                  <CardDescription>
+                    Últimas movimentações financeiras
+                  </CardDescription>
                 </div>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => navigate('/transacoes')}
                 >
@@ -203,16 +244,24 @@ export default function Dashboard() {
               <CardContent>
                 <div className="space-y-4">
                   {transacoes.map((transacao) => (
-                    <div key={transacao.id} className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0">
+                    <div
+                      key={transacao.id}
+                      className="flex items-center justify-between border-b border-border/50 pb-2 last:border-0"
+                    >
                       <div className="flex items-center gap-3">
-                        <div 
+                        <div
                           className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm"
-                          style={{ backgroundColor: transacao.categorias?.cor || '#6b7280' }}
+                          style={{
+                            backgroundColor:
+                              transacao.categorias?.cor || '#6b7280',
+                          }}
                         >
                           {transacao.categorias?.icone?.charAt(0) || '?'}
                         </div>
                         <div>
-                          <p className="font-medium text-sm">{transacao.descricao}</p>
+                          <p className="font-medium text-sm">
+                            {transacao.descricao}
+                          </p>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <span>{transacao.categorias?.nome}</span>
                             <span>•</span>
@@ -220,15 +269,22 @@ export default function Dashboard() {
                             <span>•</span>
                             <div className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              <span>{formatDate(transacao.data_transacao)}</span>
+                              <span>
+                                {formatDate(transacao.data_transacao)}
+                              </span>
                             </div>
                           </div>
                         </div>
                       </div>
-                      <div className={`text-sm font-semibold ${
-                        transacao.tipo === 'receita' ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {transacao.tipo === 'receita' ? '+' : '-'}{formatCurrency(Number(transacao.valor))}
+                      <div
+                        className={`text-sm font-semibold ${
+                          transacao.tipo === 'receita'
+                            ? 'text-green-600'
+                            : 'text-red-600'
+                        }`}
+                      >
+                        {transacao.tipo === 'receita' ? '+' : '-'}
+                        {formatCurrency(Number(transacao.valor))}
                       </div>
                     </div>
                   ))}

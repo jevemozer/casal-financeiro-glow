@@ -41,10 +41,12 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { LoadingButton } from '@/components/ui/loading';
 import {
   orcamentoSchema,
   type OrcamentoFormData,
 } from '@/lib/validations/orcamento';
+import { cn } from '@/lib/utils';
 
 interface Categoria {
   id: string;
@@ -78,16 +80,25 @@ export default function Orcamentos() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [gastosCategoria, setGastosCategoria] = useState<GastoCategoria[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOrcamento, setEditingOrcamento] = useState<Orcamento | null>(
     null,
   );
   const [selectedMes, setSelectedMes] = useState(new Date().getMonth() + 1);
   const [selectedAno, setSelectedAno] = useState(new Date().getFullYear());
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [isValidating, setIsValidating] = useState(false);
   const [formData, setFormData] = useState({
     categoria_id: '',
     valor_limite: '',
   });
+
+  useEffect(() => {
+    if (user && casal?.id) {
+      fetchData();
+    }
+  }, [user, casal?.id, selectedMes, selectedAno]);
 
   if (!user) {
     return <Navigate to="/auth" replace />;
@@ -173,8 +184,52 @@ export default function Orcamentos() {
     fetchData();
   }, [casal?.id, selectedMes, selectedAno]);
 
+  // Validação em tempo real
+  const validateField = (field: string, value: string | number) => {
+    if (!isValidating) return;
+
+    try {
+      const testData = {
+        ...formData,
+        [field]: value,
+        mes: selectedMes,
+        ano: selectedAno,
+      };
+      const result = orcamentoSchema.safeParse(testData);
+
+      if (!result.success) {
+        const fieldError = result.error.errors.find((error) =>
+          error.path.includes(field),
+        );
+        setFieldErrors((prev) => ({
+          ...prev,
+          [field]: fieldError?.message || '',
+        }));
+      } else {
+        setFieldErrors((prev) => {
+          const newErrors = { ...prev };
+          delete newErrors[field];
+          return newErrors;
+        });
+      }
+    } catch (error) {
+      // Ignora erros de validação durante digitação
+    }
+  };
+
+  const handleInputChange = (field: string, value: string | number) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    validateField(field, value);
+  };
+
   const handleSubmit = async () => {
     if (!casal?.id) return;
+
+    setSubmitting(true);
+    setIsValidating(true);
+
+    // Limpar erros anteriores
+    setFieldErrors({});
 
     // Preparar dados para validação
     const validationData = {
@@ -189,12 +244,25 @@ export default function Orcamentos() {
 
     if (!validationResult.success) {
       const errors = validationResult.error.errors;
+
+      // Mapear erros por campo
+      const newFieldErrors: Record<string, string> = {};
+      errors.forEach((error) => {
+        const field = error.path[0] as string;
+        newFieldErrors[field] = error.message;
+      });
+
+      setFieldErrors(newFieldErrors);
+
+      // Mostrar primeiro erro como toast
       const firstError = errors[0];
       toast({
         title: 'Erro de Validação',
         description: firstError.message,
         variant: 'destructive',
       });
+
+      setSubmitting(false);
       return;
     }
 
@@ -234,6 +302,7 @@ export default function Orcamentos() {
       setDialogOpen(false);
       setEditingOrcamento(null);
       setFormData({ categoria_id: '', valor_limite: '' });
+      setFieldErrors({});
       fetchData();
     } catch (error) {
       console.error('Error saving orcamento:', error);
@@ -242,6 +311,8 @@ export default function Orcamentos() {
         description: 'Não foi possível salvar o orçamento.',
         variant: 'destructive',
       });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -339,135 +410,191 @@ export default function Orcamentos() {
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <PiggyBank className="h-6 w-6 text-primary" />
+            <h1 className="text-xl font-bold">CasalFinance</h1>
+          </div>
+
           <div className="flex items-center gap-4">
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => navigate('/dashboard')}
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>
-            <div className="flex items-center gap-2">
-              <PiggyBank className="h-6 w-6 text-primary" />
-              <h1 className="text-xl font-bold">Orçamentos</h1>
-            </div>
+            <span className="text-sm text-muted-foreground">
+              Olá, {user.user_metadata?.full_name || user.email}
+            </span>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold">Orçamentos</h2>
+            <p className="text-muted-foreground">
+              Controle seus gastos por categoria
+            </p>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Select
-                value={selectedMes.toString()}
-                onValueChange={(value) => setSelectedMes(parseInt(value))}
-              >
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {meses.map((mes, index) => (
-                    <SelectItem key={index} value={(index + 1).toString()}>
-                      {mes}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Novo Orçamento
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingOrcamento ? 'Editar Orçamento' : 'Novo Orçamento'}
+                </DialogTitle>
+                <DialogDescription>
+                  Defina um limite de gastos para uma categoria específica.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="categoria_id">Categoria</Label>
+                  <Select
+                    value={formData.categoria_id}
+                    onValueChange={(value) =>
+                      handleInputChange('categoria_id', value)
+                    }
+                  >
+                    <SelectTrigger
+                      className={cn(
+                        fieldErrors.categoria_id &&
+                          'border-destructive focus:ring-destructive',
+                      )}
+                    >
+                      <SelectValue placeholder="Selecione uma categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getAvailableCategories().map((categoria) => (
+                        <SelectItem key={categoria.id} value={categoria.id}>
+                          {categoria.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {fieldErrors.categoria_id && (
+                    <div className="flex items-center gap-1 text-sm text-destructive">
+                      <AlertCircle className="h-3 w-3" />
+                      {fieldErrors.categoria_id}
+                    </div>
+                  )}
+                </div>
 
-              <Select
-                value={selectedAno.toString()}
-                onValueChange={(value) => setSelectedAno(parseInt(value))}
-              >
-                <SelectTrigger className="w-24">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[2023, 2024, 2025, 2026].map((ano) => (
-                    <SelectItem key={ano} value={ano.toString()}>
-                      {ano}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="valor_limite">Valor Limite</Label>
+                  <Input
+                    id="valor_limite"
+                    type="number"
+                    step="0.01"
+                    placeholder="0,00"
+                    value={formData.valor_limite}
+                    onChange={(e) =>
+                      handleInputChange('valor_limite', e.target.value)
+                    }
+                    className={cn(
+                      fieldErrors.valor_limite &&
+                        'border-destructive focus:ring-destructive',
+                    )}
+                  />
+                  {fieldErrors.valor_limite && (
+                    <div className="flex items-center gap-1 text-sm text-destructive">
+                      <AlertCircle className="h-3 w-3" />
+                      {fieldErrors.valor_limite}
+                    </div>
+                  )}
+                </div>
 
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button disabled={getAvailableCategories().length === 0}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Novo Orçamento
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingOrcamento ? 'Editar Orçamento' : 'Novo Orçamento'}
-                  </DialogTitle>
-                  <DialogDescription>
-                    Defina um limite de gastos para uma categoria específica.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="categoria">Categoria</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Mês</Label>
                     <Select
-                      value={formData.categoria_id}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, categoria_id: value })
-                      }
+                      value={selectedMes.toString()}
+                      onValueChange={(value) => setSelectedMes(parseInt(value))}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma categoria" />
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {(editingOrcamento
-                          ? categorias
-                          : getAvailableCategories()
-                        ).map((categoria) => (
-                          <SelectItem key={categoria.id} value={categoria.id}>
-                            {categoria.nome}
+                        <SelectItem value="1">Janeiro</SelectItem>
+                        <SelectItem value="2">Fevereiro</SelectItem>
+                        <SelectItem value="3">Março</SelectItem>
+                        <SelectItem value="4">Abril</SelectItem>
+                        <SelectItem value="5">Maio</SelectItem>
+                        <SelectItem value="6">Junho</SelectItem>
+                        <SelectItem value="7">Julho</SelectItem>
+                        <SelectItem value="8">Agosto</SelectItem>
+                        <SelectItem value="9">Setembro</SelectItem>
+                        <SelectItem value="10">Outubro</SelectItem>
+                        <SelectItem value="11">Novembro</SelectItem>
+                        <SelectItem value="12">Dezembro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Ano</Label>
+                    <Select
+                      value={selectedAno.toString()}
+                      onValueChange={(value) => setSelectedAno(parseInt(value))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from(
+                          { length: 5 },
+                          (_, i) => new Date().getFullYear() + i,
+                        ).map((ano) => (
+                          <SelectItem key={ano} value={ano.toString()}>
+                            {ano}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="valor_limite">Valor Limite</Label>
-                    <Input
-                      id="valor_limite"
-                      type="number"
-                      step="0.01"
-                      value={formData.valor_limite}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          valor_limite: e.target.value,
-                        })
-                      }
-                      placeholder="0,00"
-                    />
-                  </div>
                 </div>
+
                 <DialogFooter>
                   <Button
+                    type="button"
                     variant="outline"
                     onClick={() => {
                       setDialogOpen(false);
                       setEditingOrcamento(null);
                       setFormData({ categoria_id: '', valor_limite: '' });
+                      setFieldErrors({});
                     }}
+                    disabled={submitting}
                   >
                     Cancelar
                   </Button>
-                  <Button onClick={handleSubmit}>
-                    {editingOrcamento ? 'Atualizar' : 'Criar Orçamento'}
-                  </Button>
+                  <LoadingButton
+                    onClick={handleSubmit}
+                    loading={submitting}
+                    disabled={submitting || Object.keys(fieldErrors).length > 0}
+                  >
+                    {submitting
+                      ? 'Salvando...'
+                      : editingOrcamento
+                      ? 'Atualizar'
+                      : 'Criar Orçamento'}
+                  </LoadingButton>
                 </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
-      </header>
 
-      <main className="container mx-auto px-4 py-8">
         {orcamentos.length === 0 ? (
           <div className="text-center py-12">
             <PiggyBank className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
@@ -603,7 +730,7 @@ export default function Orcamentos() {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }

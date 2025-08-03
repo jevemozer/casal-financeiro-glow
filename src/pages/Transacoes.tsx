@@ -41,12 +41,14 @@ import {
   DollarSign,
   Trash2,
   Edit,
+  AlertCircle,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   transacaoSchema,
   type TransacaoFormData,
 } from '@/lib/validations/transacao';
+import { cn } from '@/lib/utils';
 
 interface Transacao {
   id: string;
@@ -87,6 +89,8 @@ export default function Transacoes() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [isValidating, setIsValidating] = useState(false);
 
   const [formData, setFormData] = useState({
     descricao: '',
@@ -177,17 +181,66 @@ export default function Transacoes() {
     }
   };
 
+  // Validação em tempo real
+  const validateField = (field: string, value: any) => {
+    if (!isValidating) return;
+
+    try {
+      const testData = { ...formData, [field]: value };
+      const result = transacaoSchema.safeParse(testData);
+
+      if (!result.success) {
+        const fieldError = result.error.errors.find((error) =>
+          error.path.includes(field),
+        );
+        setFieldErrors((prev) => ({
+          ...prev,
+          [field]: fieldError?.message || '',
+        }));
+      } else {
+        setFieldErrors((prev) => {
+          const newErrors = { ...prev };
+          delete newErrors[field];
+          return newErrors;
+        });
+      }
+    } catch (error) {
+      // Ignora erros de validação durante digitação
+    }
+  };
+
+  const handleInputChange = (field: string, value: any) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    validateField(field, value);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    setIsValidating(true);
+
+    // Limpar erros anteriores
+    setFieldErrors({});
 
     // Validar dados com Zod
     const validationResult = transacaoSchema.safeParse(formData);
 
     if (!validationResult.success) {
       const errors = validationResult.error.errors;
+
+      // Mapear erros por campo
+      const newFieldErrors: Record<string, string> = {};
+      errors.forEach((error) => {
+        const field = error.path[0] as string;
+        newFieldErrors[field] = error.message;
+      });
+
+      setFieldErrors(newFieldErrors);
+
+      // Mostrar primeiro erro como toast
       const firstError = errors[0];
-      toast.error(firstError.message);
+      toast.error(`Erro de validação: ${firstError.message}`);
+
       setSubmitting(false);
       return;
     }
@@ -230,6 +283,7 @@ export default function Transacoes() {
         recorrente: false,
         frequencia_recorrencia: '',
       });
+      setFieldErrors({});
       fetchData();
     } catch (error: any) {
       toast.error('Erro ao adicionar transação: ' + error.message);
@@ -332,14 +386,15 @@ export default function Transacoes() {
                     <Select
                       value={formData.tipo}
                       onValueChange={(value: 'receita' | 'despesa') =>
-                        setFormData({
-                          ...formData,
-                          tipo: value,
-                          categoria_id: '',
-                        })
+                        handleInputChange('tipo', value)
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger
+                        className={cn(
+                          fieldErrors.tipo &&
+                            'border-destructive focus:ring-destructive',
+                        )}
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -347,6 +402,12 @@ export default function Transacoes() {
                         <SelectItem value="despesa">Despesa</SelectItem>
                       </SelectContent>
                     </Select>
+                    {fieldErrors.tipo && (
+                      <div className="flex items-center gap-1 text-sm text-destructive">
+                        <AlertCircle className="h-3 w-3" />
+                        {fieldErrors.tipo}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -355,11 +416,20 @@ export default function Transacoes() {
                       id="descricao"
                       value={formData.descricao}
                       onChange={(e) =>
-                        setFormData({ ...formData, descricao: e.target.value })
+                        handleInputChange('descricao', e.target.value)
                       }
                       placeholder="Ex: Salário, Supermercado..."
-                      required
+                      className={cn(
+                        fieldErrors.descricao &&
+                          'border-destructive focus:ring-destructive',
+                      )}
                     />
+                    {fieldErrors.descricao && (
+                      <div className="flex items-center gap-1 text-sm text-destructive">
+                        <AlertCircle className="h-3 w-3" />
+                        {fieldErrors.descricao}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -370,11 +440,20 @@ export default function Transacoes() {
                       step="0.01"
                       value={formData.valor}
                       onChange={(e) =>
-                        setFormData({ ...formData, valor: e.target.value })
+                        handleInputChange('valor', e.target.value)
                       }
                       placeholder="0,00"
-                      required
+                      className={cn(
+                        fieldErrors.valor &&
+                          'border-destructive focus:ring-destructive',
+                      )}
                     />
+                    {fieldErrors.valor && (
+                      <div className="flex items-center gap-1 text-sm text-destructive">
+                        <AlertCircle className="h-3 w-3" />
+                        {fieldErrors.valor}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -382,10 +461,15 @@ export default function Transacoes() {
                     <Select
                       value={formData.categoria_id}
                       onValueChange={(value) =>
-                        setFormData({ ...formData, categoria_id: value })
+                        handleInputChange('categoria_id', value)
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger
+                        className={cn(
+                          fieldErrors.categoria_id &&
+                            'border-destructive focus:ring-destructive',
+                        )}
+                      >
                         <SelectValue placeholder="Selecione uma categoria" />
                       </SelectTrigger>
                       <SelectContent>
@@ -396,6 +480,12 @@ export default function Transacoes() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {fieldErrors.categoria_id && (
+                      <div className="flex items-center gap-1 text-sm text-destructive">
+                        <AlertCircle className="h-3 w-3" />
+                        {fieldErrors.categoria_id}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -403,10 +493,15 @@ export default function Transacoes() {
                     <Select
                       value={formData.conta_id}
                       onValueChange={(value) =>
-                        setFormData({ ...formData, conta_id: value })
+                        handleInputChange('conta_id', value)
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger
+                        className={cn(
+                          fieldErrors.conta_id &&
+                            'border-destructive focus:ring-destructive',
+                        )}
+                      >
                         <SelectValue placeholder="Selecione uma conta" />
                       </SelectTrigger>
                       <SelectContent>
@@ -417,6 +512,12 @@ export default function Transacoes() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {fieldErrors.conta_id && (
+                      <div className="flex items-center gap-1 text-sm text-destructive">
+                        <AlertCircle className="h-3 w-3" />
+                        {fieldErrors.conta_id}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -426,13 +527,19 @@ export default function Transacoes() {
                       type="date"
                       value={formData.data_transacao}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          data_transacao: e.target.value,
-                        })
+                        handleInputChange('data_transacao', e.target.value)
                       }
-                      required
+                      className={cn(
+                        fieldErrors.data_transacao &&
+                          'border-destructive focus:ring-destructive',
+                      )}
                     />
+                    {fieldErrors.data_transacao && (
+                      <div className="flex items-center gap-1 text-sm text-destructive">
+                        <AlertCircle className="h-3 w-3" />
+                        {fieldErrors.data_transacao}
+                      </div>
+                    )}
                   </div>
 
                   <LoadingButton
@@ -440,6 +547,7 @@ export default function Transacoes() {
                     className="w-full"
                     loading={submitting}
                     loadingText="Adicionando transação..."
+                    disabled={submitting || Object.keys(fieldErrors).length > 0}
                   >
                     Adicionar Transação
                   </LoadingButton>

@@ -26,6 +26,7 @@ import {
   ArrowLeft,
   Pencil,
   Trash2,
+  AlertCircle,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -35,7 +36,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { LoadingButton, LoadingCard } from '@/components/ui/loading';
 import { contaSchema, type ContaFormData } from '@/lib/validations/conta';
+import { cn } from '@/lib/utils';
 
 interface Conta {
   id: string;
@@ -51,8 +54,11 @@ export default function Contas() {
   const { toast } = useToast();
   const [contas, setContas] = useState<Conta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingConta, setEditingConta] = useState<Conta | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [isValidating, setIsValidating] = useState(false);
 
   const [formData, setFormData] = useState({
     nome: '',
@@ -62,13 +68,15 @@ export default function Contas() {
     limite_credito: '',
   });
 
+  useEffect(() => {
+    if (user) {
+      fetchContas();
+    }
+  }, [user]);
+
   if (!user) {
     return <Navigate to="/auth" replace />;
   }
-
-  useEffect(() => {
-    fetchContas();
-  }, []);
 
   const fetchContas = async () => {
     try {
@@ -104,20 +112,74 @@ export default function Contas() {
     }
   };
 
+  // Validação em tempo real
+  const validateField = (field: string, value: string | number | boolean) => {
+    if (!isValidating) return;
+
+    try {
+      const testData = { ...formData, [field]: value };
+      const result = contaSchema.safeParse(testData);
+
+      if (!result.success) {
+        const fieldError = result.error.errors.find((error) =>
+          error.path.includes(field),
+        );
+        setFieldErrors((prev) => ({
+          ...prev,
+          [field]: fieldError?.message || '',
+        }));
+      } else {
+        setFieldErrors((prev) => {
+          const newErrors = { ...prev };
+          delete newErrors[field];
+          return newErrors;
+        });
+      }
+    } catch (error) {
+      // Ignora erros de validação durante digitação
+    }
+  };
+
+  const handleInputChange = (
+    field: string,
+    value: string | number | boolean,
+  ) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    validateField(field, value);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
+    setIsValidating(true);
+
+    // Limpar erros anteriores
+    setFieldErrors({});
 
     // Validar dados com Zod
     const validationResult = contaSchema.safeParse(formData);
 
     if (!validationResult.success) {
       const errors = validationResult.error.errors;
+
+      // Mapear erros por campo
+      const newFieldErrors: Record<string, string> = {};
+      errors.forEach((error) => {
+        const field = error.path[0] as string;
+        newFieldErrors[field] = error.message;
+      });
+
+      setFieldErrors(newFieldErrors);
+
+      // Mostrar primeiro erro como toast
       const firstError = errors[0];
       toast({
         title: 'Erro de Validação',
         description: firstError.message,
         variant: 'destructive',
       });
+
+      setSubmitting(false);
       return;
     }
 
@@ -135,6 +197,7 @@ export default function Contas() {
           description: 'Você precisa estar conectado a um parceiro primeiro.',
           variant: 'destructive',
         });
+        setSubmitting(false);
         return;
       }
 
@@ -182,6 +245,7 @@ export default function Contas() {
       });
       setEditingConta(null);
       setIsDialogOpen(false);
+      setFieldErrors({});
       fetchContas();
     } catch (error) {
       toast({
@@ -189,6 +253,8 @@ export default function Contas() {
         description: 'Não foi possível salvar a conta.',
         variant: 'destructive',
       });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -295,24 +361,35 @@ export default function Contas() {
                   <Input
                     id="nome"
                     value={formData.nome}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, nome: e.target.value }))
-                    }
+                    onChange={(e) => handleInputChange('nome', e.target.value)}
                     placeholder="Ex: Conta Corrente Nubank"
                     required
+                    className={cn(
+                      fieldErrors.nome &&
+                        'border-destructive focus:ring-destructive',
+                    )}
                   />
+                  {fieldErrors.nome && (
+                    <div className="flex items-center gap-1 text-sm text-destructive">
+                      <AlertCircle className="h-3 w-3" />
+                      {fieldErrors.nome}
+                    </div>
+                  )}
                 </div>
 
                 <div>
                   <Label htmlFor="tipo">Tipo</Label>
                   <Select
                     value={formData.tipo}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({ ...prev, tipo: value }))
-                    }
+                    onValueChange={(value) => handleInputChange('tipo', value)}
                     required
                   >
-                    <SelectTrigger>
+                    <SelectTrigger
+                      className={cn(
+                        fieldErrors.tipo &&
+                          'border-destructive focus:ring-destructive',
+                      )}
+                    >
                       <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
                     <SelectContent>
@@ -322,6 +399,12 @@ export default function Contas() {
                       <SelectItem value="investimento">Investimento</SelectItem>
                     </SelectContent>
                   </Select>
+                  {fieldErrors.tipo && (
+                    <div className="flex items-center gap-1 text-sm text-destructive">
+                      <AlertCircle className="h-3 w-3" />
+                      {fieldErrors.tipo}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -329,14 +412,19 @@ export default function Contas() {
                   <Input
                     id="banco"
                     value={formData.banco}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        banco: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => handleInputChange('banco', e.target.value)}
                     placeholder="Ex: Nubank, Itaú, Bradesco..."
+                    className={cn(
+                      fieldErrors.banco &&
+                        'border-destructive focus:ring-destructive',
+                    )}
                   />
+                  {fieldErrors.banco && (
+                    <div className="flex items-center gap-1 text-sm text-destructive">
+                      <AlertCircle className="h-3 w-3" />
+                      {fieldErrors.banco}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -346,14 +434,19 @@ export default function Contas() {
                     type="number"
                     step="0.01"
                     value={formData.saldo}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        saldo: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => handleInputChange('saldo', e.target.value)}
                     placeholder="0.00"
+                    className={cn(
+                      fieldErrors.saldo &&
+                        'border-destructive focus:ring-destructive',
+                    )}
                   />
+                  {fieldErrors.saldo && (
+                    <div className="flex items-center gap-1 text-sm text-destructive">
+                      <AlertCircle className="h-3 w-3" />
+                      {fieldErrors.saldo}
+                    </div>
+                  )}
                 </div>
 
                 {formData.tipo === 'credito' && (
@@ -365,24 +458,38 @@ export default function Contas() {
                       step="0.01"
                       value={formData.limite_credito}
                       onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          limite_credito: e.target.value,
-                        }))
+                        handleInputChange('limite_credito', e.target.value)
                       }
                       placeholder="0.00"
+                      className={cn(
+                        fieldErrors.limite_credito &&
+                          'border-destructive focus:ring-destructive',
+                      )}
                     />
+                    {fieldErrors.limite_credito && (
+                      <div className="flex items-center gap-1 text-sm text-destructive">
+                        <AlertCircle className="h-3 w-3" />
+                        {fieldErrors.limite_credito}
+                      </div>
+                    )}
                   </div>
                 )}
 
                 <div className="flex gap-2">
-                  <Button type="submit" className="flex-1">
+                  <LoadingButton
+                    type="submit"
+                    className="flex-1"
+                    loading={submitting}
+                    loadingText="Salvando..."
+                    disabled={Object.keys(fieldErrors).length > 0}
+                  >
                     {editingConta ? 'Atualizar' : 'Adicionar'}
-                  </Button>
+                  </LoadingButton>
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => setIsDialogOpen(false)}
+                    disabled={submitting}
                   >
                     Cancelar
                   </Button>
@@ -393,7 +500,11 @@ export default function Contas() {
         </div>
 
         {loading ? (
-          <div className="text-center py-8">Carregando contas...</div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <LoadingCard key={i} size="md" lines={3} />
+            ))}
+          </div>
         ) : contas.length === 0 ? (
           <Card className="text-center py-8">
             <CardContent className="pt-6">

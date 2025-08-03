@@ -32,10 +32,13 @@ import {
   DollarSign,
   Edit,
   Trash2,
+  AlertCircle,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { LoadingButton } from '@/components/ui/loading';
 import { metaSchema, type MetaFormData } from '@/lib/validations/meta';
+import { cn } from '@/lib/utils';
 
 interface Meta {
   id: string;
@@ -57,8 +60,11 @@ export default function Metas() {
 
   const [metas, setMetas] = useState<Meta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingMeta, setEditingMeta] = useState<Meta | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [isValidating, setIsValidating] = useState(false);
   const [formData, setFormData] = useState({
     titulo: '',
     descricao: '',
@@ -98,20 +104,72 @@ export default function Metas() {
     fetchMetas();
   }, [casal?.id]);
 
+  // Validação em tempo real
+  const validateField = (field: string, value: string | number) => {
+    if (!isValidating) return;
+
+    try {
+      const testData = { ...formData, [field]: value };
+      const result = metaSchema.safeParse(testData);
+
+      if (!result.success) {
+        const fieldError = result.error.errors.find((error) =>
+          error.path.includes(field),
+        );
+        setFieldErrors((prev) => ({
+          ...prev,
+          [field]: fieldError?.message || '',
+        }));
+      } else {
+        setFieldErrors((prev) => {
+          const newErrors = { ...prev };
+          delete newErrors[field];
+          return newErrors;
+        });
+      }
+    } catch (error) {
+      // Ignora erros de validação durante digitação
+    }
+  };
+
+  const handleInputChange = (field: string, value: string | number) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    validateField(field, value);
+  };
+
   const handleSubmit = async () => {
     if (!casal?.id) return;
+
+    setSubmitting(true);
+    setIsValidating(true);
+
+    // Limpar erros anteriores
+    setFieldErrors({});
 
     // Validar dados com Zod
     const validationResult = metaSchema.safeParse(formData);
 
     if (!validationResult.success) {
       const errors = validationResult.error.errors;
+
+      // Mapear erros por campo
+      const newFieldErrors: Record<string, string> = {};
+      errors.forEach((error) => {
+        const field = error.path[0] as string;
+        newFieldErrors[field] = error.message;
+      });
+
+      setFieldErrors(newFieldErrors);
+
+      // Mostrar primeiro erro como toast
       const firstError = errors[0];
       toast({
         title: 'Erro de Validação',
         description: firstError.message,
         variant: 'destructive',
       });
+
+      setSubmitting(false);
       return;
     }
 
@@ -154,6 +212,7 @@ export default function Metas() {
         valor_objetivo: '',
         data_objetivo: '',
       });
+      setFieldErrors({});
       fetchMetas();
     } catch (error) {
       console.error('Error saving meta:', error);
@@ -162,6 +221,8 @@ export default function Metas() {
         description: 'Não foi possível salvar a meta.',
         variant: 'destructive',
       });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -243,19 +304,35 @@ export default function Metas() {
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Target className="h-6 w-6 text-primary" />
+            <h1 className="text-xl font-bold">CasalFinance</h1>
+          </div>
+
           <div className="flex items-center gap-4">
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => navigate('/dashboard')}
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>
-            <div className="flex items-center gap-2">
-              <Target className="h-6 w-6 text-primary" />
-              <h1 className="text-xl font-bold">Metas Financeiras</h1>
-            </div>
+            <span className="text-sm text-muted-foreground">
+              Olá, {user.user_metadata?.full_name || user.email}
+            </span>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold">Metas Financeiras</h2>
+            <p className="text-muted-foreground">
+              Defina e acompanhe suas metas financeiras
+            </p>
           </div>
 
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -271,91 +348,138 @@ export default function Metas() {
                   {editingMeta ? 'Editar Meta' : 'Nova Meta'}
                 </DialogTitle>
                 <DialogDescription>
-                  {editingMeta
-                    ? 'Atualize as informações da meta.'
-                    : 'Crie uma nova meta financeira para alcançar seus objetivos.'}
+                  Defina uma nova meta financeira para você e seu parceiro.
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="titulo">Título</Label>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="titulo">Título da Meta</Label>
                   <Input
                     id="titulo"
+                    placeholder="Ex: Viagem para Europa"
                     value={formData.titulo}
                     onChange={(e) =>
-                      setFormData({ ...formData, titulo: e.target.value })
+                      handleInputChange('titulo', e.target.value)
                     }
-                    placeholder="Ex: Viagem para Europa"
+                    className={cn(
+                      fieldErrors.titulo &&
+                        'border-destructive focus:ring-destructive',
+                    )}
                   />
+                  {fieldErrors.titulo && (
+                    <div className="flex items-center gap-1 text-sm text-destructive">
+                      <AlertCircle className="h-3 w-3" />
+                      {fieldErrors.titulo}
+                    </div>
+                  )}
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="descricao">Descrição (opcional)</Label>
+
+                <div className="space-y-2">
+                  <Label htmlFor="descricao">Descrição (Opcional)</Label>
                   <Textarea
                     id="descricao"
+                    placeholder="Descreva sua meta..."
                     value={formData.descricao}
                     onChange={(e) =>
-                      setFormData({ ...formData, descricao: e.target.value })
+                      handleInputChange('descricao', e.target.value)
                     }
-                    placeholder="Descreva os detalhes da sua meta..."
+                    className={cn(
+                      fieldErrors.descricao &&
+                        'border-destructive focus:ring-destructive',
+                    )}
                   />
+                  {fieldErrors.descricao && (
+                    <div className="flex items-center gap-1 text-sm text-destructive">
+                      <AlertCircle className="h-3 w-3" />
+                      {fieldErrors.descricao}
+                    </div>
+                  )}
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="valor_objetivo">Valor Objetivo</Label>
-                  <Input
-                    id="valor_objetivo"
-                    type="number"
-                    step="0.01"
-                    value={formData.valor_objetivo}
-                    onChange={(e) =>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="valor_objetivo">Valor Objetivo</Label>
+                    <Input
+                      id="valor_objetivo"
+                      type="number"
+                      step="0.01"
+                      placeholder="0,00"
+                      value={formData.valor_objetivo}
+                      onChange={(e) =>
+                        handleInputChange('valor_objetivo', e.target.value)
+                      }
+                      className={cn(
+                        fieldErrors.valor_objetivo &&
+                          'border-destructive focus:ring-destructive',
+                      )}
+                    />
+                    {fieldErrors.valor_objetivo && (
+                      <div className="flex items-center gap-1 text-sm text-destructive">
+                        <AlertCircle className="h-3 w-3" />
+                        {fieldErrors.valor_objetivo}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="data_objetivo">Data Objetivo</Label>
+                    <Input
+                      id="data_objetivo"
+                      type="date"
+                      value={formData.data_objetivo}
+                      onChange={(e) =>
+                        handleInputChange('data_objetivo', e.target.value)
+                      }
+                      className={cn(
+                        fieldErrors.data_objetivo &&
+                          'border-destructive focus:ring-destructive',
+                      )}
+                    />
+                    {fieldErrors.data_objetivo && (
+                      <div className="flex items-center gap-1 text-sm text-destructive">
+                        <AlertCircle className="h-3 w-3" />
+                        {fieldErrors.data_objetivo}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setDialogOpen(false);
+                      setEditingMeta(null);
                       setFormData({
-                        ...formData,
-                        valor_objetivo: e.target.value,
-                      })
-                    }
-                    placeholder="0,00"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="data_objetivo">Data Objetivo</Label>
-                  <Input
-                    id="data_objetivo"
-                    type="date"
-                    value={formData.data_objetivo}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        data_objetivo: e.target.value,
-                      })
-                    }
-                  />
-                </div>
+                        titulo: '',
+                        descricao: '',
+                        valor_objetivo: '',
+                        data_objetivo: '',
+                      });
+                      setFieldErrors({});
+                    }}
+                    disabled={submitting}
+                  >
+                    Cancelar
+                  </Button>
+                  <LoadingButton
+                    onClick={handleSubmit}
+                    loading={submitting}
+                    disabled={submitting || Object.keys(fieldErrors).length > 0}
+                  >
+                    {submitting
+                      ? 'Salvando...'
+                      : editingMeta
+                      ? 'Atualizar'
+                      : 'Criar Meta'}
+                  </LoadingButton>
+                </DialogFooter>
               </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setDialogOpen(false);
-                    setEditingMeta(null);
-                    setFormData({
-                      titulo: '',
-                      descricao: '',
-                      valor_objetivo: '',
-                      data_objetivo: '',
-                    });
-                  }}
-                >
-                  Cancelar
-                </Button>
-                <Button onClick={handleSubmit}>
-                  {editingMeta ? 'Atualizar' : 'Criar Meta'}
-                </Button>
-              </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
-      </header>
 
-      <main className="container mx-auto px-4 py-8">
         {metas.length === 0 ? (
           <div className="text-center py-12">
             <Target className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
@@ -462,7 +586,7 @@ export default function Metas() {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }
