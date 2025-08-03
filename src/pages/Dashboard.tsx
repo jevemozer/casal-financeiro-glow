@@ -6,7 +6,7 @@ import { useMetas } from '@/hooks/useMetas';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Heart, LogOut, Plus, TrendingUp, Wallet, Target, ArrowRight, Clock } from 'lucide-react';
+import { Heart, LogOut, Plus, TrendingUp, Wallet, Target, ArrowRight, Clock, PiggyBank } from 'lucide-react';
 import PartnerInvite from '@/components/PartnerInvite';
 
 export default function Dashboard() {
@@ -113,14 +113,14 @@ export default function Dashboard() {
           </div>
 
           {/* Setup Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <PartnerInvite casal={casal} onPartnerConnected={refetchCasal} />
 
             <Card className="cursor-pointer hover:shadow-md transition-shadow">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Wallet className="h-5 w-5 text-primary" />
-                  Adicionar Contas
+                  Gerenciar Contas
                 </CardTitle>
                 <CardDescription>
                   Configure suas contas bancárias e cartões
@@ -130,7 +130,7 @@ export default function Dashboard() {
                 <Button 
                   className="w-full" 
                   variant="outline"
-                  onClick={() => window.location.href = '/contas'}
+                  onClick={() => navigate('/contas')}
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Gerenciar Contas
@@ -141,11 +141,33 @@ export default function Dashboard() {
             <Card className="cursor-pointer hover:shadow-md transition-shadow">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-primary" />
-                  Primeira Transação
+                  <PiggyBank className="h-5 w-5 text-primary" />
+                  Orçamentos
                 </CardTitle>
                 <CardDescription>
-                  Registre suas primeiras receitas e despesas
+                  Defina limites de gastos por categoria
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  className="w-full" 
+                  variant="outline"
+                  onClick={() => navigate('/orcamentos')}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Criar Orçamento
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="cursor-pointer hover:shadow-md transition-shadow">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  Nova Transação
+                </CardTitle>
+                <CardDescription>
+                  Registre suas receitas e despesas
                 </CardDescription>
               </CardHeader>
               <CardContent>
