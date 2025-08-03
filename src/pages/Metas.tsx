@@ -3,16 +3,39 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCasal } from '@/hooks/useCasal';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, Plus, Target, Calendar, DollarSign, Edit, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Plus,
+  Target,
+  Calendar,
+  DollarSign,
+  Edit,
+  Trash2,
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { metaSchema, type MetaFormData } from '@/lib/validations/meta';
 
 interface Meta {
   id: string;
@@ -31,7 +54,7 @@ export default function Metas() {
   const { user } = useAuth();
   const { casal } = useCasal();
   const { toast } = useToast();
-  
+
   const [metas, setMetas] = useState<Meta[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -40,7 +63,7 @@ export default function Metas() {
     titulo: '',
     descricao: '',
     valor_objetivo: '',
-    data_objetivo: ''
+    data_objetivo: '',
   });
 
   if (!user) {
@@ -62,9 +85,9 @@ export default function Metas() {
     } catch (error) {
       console.error('Error fetching metas:', error);
       toast({
-        title: "Erro",
-        description: "Não foi possível carregar as metas.",
-        variant: "destructive"
+        title: 'Erro',
+        description: 'Não foi possível carregar as metas.',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
@@ -78,13 +101,28 @@ export default function Metas() {
   const handleSubmit = async () => {
     if (!casal?.id) return;
 
+    // Validar dados com Zod
+    const validationResult = metaSchema.safeParse(formData);
+
+    if (!validationResult.success) {
+      const errors = validationResult.error.errors;
+      const firstError = errors[0];
+      toast({
+        title: 'Erro de Validação',
+        description: firstError.message,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
+      const validatedData = validationResult.data;
       const metaData = {
-        titulo: formData.titulo,
-        descricao: formData.descricao || null,
-        valor_objetivo: parseFloat(formData.valor_objetivo),
-        data_objetivo: formData.data_objetivo,
-        casal_id: casal.id
+        titulo: validatedData.titulo,
+        descricao: validatedData.descricao || null,
+        valor_objetivo: parseFloat(validatedData.valor_objetivo),
+        data_objetivo: validatedData.data_objetivo,
+        casal_id: casal.id,
       };
 
       if (editingMeta) {
@@ -95,31 +133,34 @@ export default function Metas() {
 
         if (error) throw error;
         toast({
-          title: "Sucesso",
-          description: "Meta atualizada com sucesso!"
+          title: 'Sucesso',
+          description: 'Meta atualizada com sucesso!',
         });
       } else {
-        const { error } = await supabase
-          .from('metas')
-          .insert([metaData]);
+        const { error } = await supabase.from('metas').insert([metaData]);
 
         if (error) throw error;
         toast({
-          title: "Sucesso",
-          description: "Meta criada com sucesso!"
+          title: 'Sucesso',
+          description: 'Meta criada com sucesso!',
         });
       }
 
       setDialogOpen(false);
       setEditingMeta(null);
-      setFormData({ titulo: '', descricao: '', valor_objetivo: '', data_objetivo: '' });
+      setFormData({
+        titulo: '',
+        descricao: '',
+        valor_objetivo: '',
+        data_objetivo: '',
+      });
       fetchMetas();
     } catch (error) {
       console.error('Error saving meta:', error);
       toast({
-        title: "Erro",
-        description: "Não foi possível salvar a meta.",
-        variant: "destructive"
+        title: 'Erro',
+        description: 'Não foi possível salvar a meta.',
+        variant: 'destructive',
       });
     }
   };
@@ -130,7 +171,7 @@ export default function Metas() {
       titulo: meta.titulo,
       descricao: meta.descricao || '',
       valor_objetivo: meta.valor_objetivo.toString(),
-      data_objetivo: meta.data_objetivo
+      data_objetivo: meta.data_objetivo,
     });
     setDialogOpen(true);
   };
@@ -139,24 +180,21 @@ export default function Metas() {
     if (!confirm('Tem certeza que deseja excluir esta meta?')) return;
 
     try {
-      const { error } = await supabase
-        .from('metas')
-        .delete()
-        .eq('id', meta.id);
+      const { error } = await supabase.from('metas').delete().eq('id', meta.id);
 
       if (error) throw error;
-      
+
       toast({
-        title: "Sucesso",
-        description: "Meta excluída com sucesso!"
+        title: 'Sucesso',
+        description: 'Meta excluída com sucesso!',
       });
       fetchMetas();
     } catch (error) {
       console.error('Error deleting meta:', error);
       toast({
-        title: "Erro",
-        description: "Não foi possível excluir a meta.",
-        variant: "destructive"
+        title: 'Erro',
+        description: 'Não foi possível excluir a meta.',
+        variant: 'destructive',
       });
     }
   };
@@ -164,7 +202,7 @@ export default function Metas() {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
-      currency: 'BRL'
+      currency: 'BRL',
     }).format(value);
   };
 
@@ -174,10 +212,14 @@ export default function Metas() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'ativa': return 'bg-green-100 text-green-800';
-      case 'concluida': return 'bg-blue-100 text-blue-800';
-      case 'pausada': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'ativa':
+        return 'bg-green-100 text-green-800';
+      case 'concluida':
+        return 'bg-blue-100 text-blue-800';
+      case 'pausada':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -202,7 +244,11 @@ export default function Metas() {
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/dashboard')}
+            >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>
@@ -211,7 +257,7 @@ export default function Metas() {
               <h1 className="text-xl font-bold">Metas Financeiras</h1>
             </div>
           </div>
-          
+
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -225,7 +271,9 @@ export default function Metas() {
                   {editingMeta ? 'Editar Meta' : 'Nova Meta'}
                 </DialogTitle>
                 <DialogDescription>
-                  {editingMeta ? 'Atualize as informações da meta.' : 'Crie uma nova meta financeira para alcançar seus objetivos.'}
+                  {editingMeta
+                    ? 'Atualize as informações da meta.'
+                    : 'Crie uma nova meta financeira para alcançar seus objetivos.'}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -234,7 +282,9 @@ export default function Metas() {
                   <Input
                     id="titulo"
                     value={formData.titulo}
-                    onChange={(e) => setFormData({...formData, titulo: e.target.value})}
+                    onChange={(e) =>
+                      setFormData({ ...formData, titulo: e.target.value })
+                    }
                     placeholder="Ex: Viagem para Europa"
                   />
                 </div>
@@ -243,7 +293,9 @@ export default function Metas() {
                   <Textarea
                     id="descricao"
                     value={formData.descricao}
-                    onChange={(e) => setFormData({...formData, descricao: e.target.value})}
+                    onChange={(e) =>
+                      setFormData({ ...formData, descricao: e.target.value })
+                    }
                     placeholder="Descreva os detalhes da sua meta..."
                   />
                 </div>
@@ -254,7 +306,12 @@ export default function Metas() {
                     type="number"
                     step="0.01"
                     value={formData.valor_objetivo}
-                    onChange={(e) => setFormData({...formData, valor_objetivo: e.target.value})}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        valor_objetivo: e.target.value,
+                      })
+                    }
                     placeholder="0,00"
                   />
                 </div>
@@ -264,7 +321,12 @@ export default function Metas() {
                     id="data_objetivo"
                     type="date"
                     value={formData.data_objetivo}
-                    onChange={(e) => setFormData({...formData, data_objetivo: e.target.value})}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        data_objetivo: e.target.value,
+                      })
+                    }
                   />
                 </div>
               </div>
@@ -274,7 +336,12 @@ export default function Metas() {
                   onClick={() => {
                     setDialogOpen(false);
                     setEditingMeta(null);
-                    setFormData({ titulo: '', descricao: '', valor_objetivo: '', data_objetivo: '' });
+                    setFormData({
+                      titulo: '',
+                      descricao: '',
+                      valor_objetivo: '',
+                      data_objetivo: '',
+                    });
                   }}
                 >
                   Cancelar
@@ -294,7 +361,8 @@ export default function Metas() {
             <Target className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-2">Nenhuma meta criada</h2>
             <p className="text-muted-foreground mb-6">
-              Comece definindo suas metas financeiras para alcançar seus objetivos.
+              Comece definindo suas metas financeiras para alcançar seus
+              objetivos.
             </p>
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
@@ -316,15 +384,22 @@ export default function Metas() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {metas.map((meta) => {
-                const progress = getProgress(meta.valor_atual, meta.valor_objetivo);
-                const isOverdue = new Date(meta.data_objetivo) < new Date() && meta.status === 'ativa';
-                
+                const progress = getProgress(
+                  meta.valor_atual,
+                  meta.valor_objetivo,
+                );
+                const isOverdue =
+                  new Date(meta.data_objetivo) < new Date() &&
+                  meta.status === 'ativa';
+
                 return (
                   <Card key={meta.id} className="relative">
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
                         <div className="space-y-1">
-                          <CardTitle className="text-lg">{meta.titulo}</CardTitle>
+                          <CardTitle className="text-lg">
+                            {meta.titulo}
+                          </CardTitle>
                           <Badge className={getStatusColor(meta.status)}>
                             {meta.status}
                           </Badge>
@@ -362,7 +437,7 @@ export default function Metas() {
                           <span>{formatCurrency(meta.valor_objetivo)}</span>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Calendar className="h-4 w-4" />
@@ -373,7 +448,10 @@ export default function Metas() {
                         <div className="flex items-center gap-1">
                           <DollarSign className="h-4 w-4" />
                           <span>
-                            Faltam {formatCurrency(meta.valor_objetivo - meta.valor_atual)}
+                            Faltam{' '}
+                            {formatCurrency(
+                              meta.valor_objetivo - meta.valor_atual,
+                            )}
                           </span>
                         </div>
                       </div>

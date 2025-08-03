@@ -1,15 +1,41 @@
-import { useState, useEffect } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
-import { Navigate } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, CreditCard, Wallet, ArrowLeft, Pencil, Trash2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { Navigate } from 'react-router-dom';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Plus,
+  CreditCard,
+  Wallet,
+  ArrowLeft,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { contaSchema, type ContaFormData } from '@/lib/validations/conta';
 
 interface Conta {
   id: string;
@@ -29,11 +55,11 @@ export default function Contas() {
   const [editingConta, setEditingConta] = useState<Conta | null>(null);
 
   const [formData, setFormData] = useState({
-    nome: "",
-    tipo: "",
-    banco: "",
-    saldo: "0",
-    limite_credito: ""
+    nome: '',
+    tipo: '',
+    banco: '',
+    saldo: '0',
+    limite_credito: '',
   });
 
   if (!user) {
@@ -69,9 +95,9 @@ export default function Contas() {
       setContas(data || []);
     } catch (error) {
       toast({
-        title: "Erro",
-        description: "Não foi possível carregar as contas.",
-        variant: "destructive",
+        title: 'Erro',
+        description: 'Não foi possível carregar as contas.',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
@@ -80,7 +106,21 @@ export default function Contas() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    // Validar dados com Zod
+    const validationResult = contaSchema.safeParse(formData);
+
+    if (!validationResult.success) {
+      const errors = validationResult.error.errors;
+      const firstError = errors[0];
+      toast({
+        title: 'Erro de Validação',
+        description: firstError.message,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       // Get casal_id
       const { data: casalData, error: casalError } = await supabase
@@ -91,20 +131,23 @@ export default function Contas() {
 
       if (casalError || !casalData) {
         toast({
-          title: "Erro",
-          description: "Você precisa estar conectado a um parceiro primeiro.",
-          variant: "destructive",
+          title: 'Erro',
+          description: 'Você precisa estar conectado a um parceiro primeiro.',
+          variant: 'destructive',
         });
         return;
       }
 
+      const validatedData = validationResult.data;
       const contaData = {
-        nome: formData.nome,
-        tipo: formData.tipo,
-        banco: formData.banco || null,
-        saldo: parseFloat(formData.saldo) || 0,
-        limite_credito: formData.limite_credito ? parseFloat(formData.limite_credito) : null,
-        casal_id: casalData.id
+        nome: validatedData.nome,
+        tipo: validatedData.tipo,
+        banco: validatedData.banco || null,
+        saldo: parseFloat(validatedData.saldo) || 0,
+        limite_credito: validatedData.limite_credito
+          ? parseFloat(validatedData.limite_credito)
+          : null,
+        casal_id: casalData.id,
       };
 
       if (editingConta) {
@@ -114,33 +157,37 @@ export default function Contas() {
           .eq('id', editingConta.id);
 
         if (error) throw error;
-        
+
         toast({
-          title: "Sucesso",
-          description: "Conta atualizada com sucesso!",
+          title: 'Sucesso',
+          description: 'Conta atualizada com sucesso!',
         });
       } else {
-        const { error } = await supabase
-          .from('contas')
-          .insert([contaData]);
+        const { error } = await supabase.from('contas').insert([contaData]);
 
         if (error) throw error;
-        
+
         toast({
-          title: "Sucesso",
-          description: "Conta adicionada com sucesso!",
+          title: 'Sucesso',
+          description: 'Conta adicionada com sucesso!',
         });
       }
 
-      setFormData({ nome: "", tipo: "", banco: "", saldo: "0", limite_credito: "" });
+      setFormData({
+        nome: '',
+        tipo: '',
+        banco: '',
+        saldo: '0',
+        limite_credito: '',
+      });
       setEditingConta(null);
       setIsDialogOpen(false);
       fetchContas();
     } catch (error) {
       toast({
-        title: "Erro",
-        description: "Não foi possível salvar a conta.",
-        variant: "destructive",
+        title: 'Erro',
+        description: 'Não foi possível salvar a conta.',
+        variant: 'destructive',
       });
     }
   };
@@ -150,48 +197,51 @@ export default function Contas() {
     setFormData({
       nome: conta.nome,
       tipo: conta.tipo,
-      banco: conta.banco || "",
+      banco: conta.banco || '',
       saldo: conta.saldo.toString(),
-      limite_credito: conta.limite_credito?.toString() || ""
+      limite_credito: conta.limite_credito?.toString() || '',
     });
     setIsDialogOpen(true);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Tem certeza que deseja excluir esta conta?")) return;
+    if (!confirm('Tem certeza que deseja excluir esta conta?')) return;
 
     try {
-      const { error } = await supabase
-        .from('contas')
-        .delete()
-        .eq('id', id);
+      const { error } = await supabase.from('contas').delete().eq('id', id);
 
       if (error) throw error;
 
       toast({
-        title: "Sucesso",
-        description: "Conta excluída com sucesso!",
+        title: 'Sucesso',
+        description: 'Conta excluída com sucesso!',
       });
-      
+
       fetchContas();
     } catch (error) {
       toast({
-        title: "Erro",
-        description: "Não foi possível excluir a conta.",
-        variant: "destructive",
+        title: 'Erro',
+        description: 'Não foi possível excluir a conta.',
+        variant: 'destructive',
       });
     }
   };
 
   const resetForm = () => {
-    setFormData({ nome: "", tipo: "", banco: "", saldo: "0", limite_credito: "" });
+    setFormData({
+      nome: '',
+      tipo: '',
+      banco: '',
+      saldo: '0',
+      limite_credito: '',
+    });
     setEditingConta(null);
   };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
-      currency: 'BRL'
+      currency: 'BRL',
     }).format(value);
   };
 
@@ -199,24 +249,34 @@ export default function Contas() {
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center gap-4 mb-6">
-          <Button variant="ghost" size="icon" onClick={() => window.history.back()}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => window.history.back()}
+          >
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
             <h1 className="text-3xl font-bold">Contas</h1>
-            <p className="text-muted-foreground">Gerencie suas contas bancárias e cartões</p>
+            <p className="text-muted-foreground">
+              Gerencie suas contas bancárias e cartões
+            </p>
           </div>
         </div>
 
         <div className="flex justify-between items-center mb-6">
           <div className="text-sm text-muted-foreground">
-            {contas.length} conta{contas.length !== 1 ? 's' : ''} cadastrada{contas.length !== 1 ? 's' : ''}
+            {contas.length} conta{contas.length !== 1 ? 's' : ''} cadastrada
+            {contas.length !== 1 ? 's' : ''}
           </div>
-          
-          <Dialog open={isDialogOpen} onOpenChange={(open) => {
-            setIsDialogOpen(open);
-            if (!open) resetForm();
-          }}>
+
+          <Dialog
+            open={isDialogOpen}
+            onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) resetForm();
+            }}
+          >
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -235,7 +295,9 @@ export default function Contas() {
                   <Input
                     id="nome"
                     value={formData.nome}
-                    onChange={(e) => setFormData(prev => ({ ...prev, nome: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, nome: e.target.value }))
+                    }
                     placeholder="Ex: Conta Corrente Nubank"
                     required
                   />
@@ -243,9 +305,11 @@ export default function Contas() {
 
                 <div>
                   <Label htmlFor="tipo">Tipo</Label>
-                  <Select 
-                    value={formData.tipo} 
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, tipo: value }))}
+                  <Select
+                    value={formData.tipo}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, tipo: value }))
+                    }
                     required
                   >
                     <SelectTrigger>
@@ -265,7 +329,12 @@ export default function Contas() {
                   <Input
                     id="banco"
                     value={formData.banco}
-                    onChange={(e) => setFormData(prev => ({ ...prev, banco: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        banco: e.target.value,
+                      }))
+                    }
                     placeholder="Ex: Nubank, Itaú, Bradesco..."
                   />
                 </div>
@@ -277,7 +346,12 @@ export default function Contas() {
                     type="number"
                     step="0.01"
                     value={formData.saldo}
-                    onChange={(e) => setFormData(prev => ({ ...prev, saldo: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        saldo: e.target.value,
+                      }))
+                    }
                     placeholder="0.00"
                   />
                 </div>
@@ -290,7 +364,12 @@ export default function Contas() {
                       type="number"
                       step="0.01"
                       value={formData.limite_credito}
-                      onChange={(e) => setFormData(prev => ({ ...prev, limite_credito: e.target.value }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          limite_credito: e.target.value,
+                        }))
+                      }
                       placeholder="0.00"
                     />
                   </div>
@@ -300,9 +379,9 @@ export default function Contas() {
                   <Button type="submit" className="flex-1">
                     {editingConta ? 'Atualizar' : 'Adicionar'}
                   </Button>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => setIsDialogOpen(false)}
                   >
                     Cancelar
@@ -319,9 +398,12 @@ export default function Contas() {
           <Card className="text-center py-8">
             <CardContent className="pt-6">
               <Wallet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">Nenhuma conta cadastrada</h3>
+              <h3 className="text-lg font-semibold mb-2">
+                Nenhuma conta cadastrada
+              </h3>
               <p className="text-muted-foreground mb-4">
-                Adicione sua primeira conta para começar a gerenciar suas finanças
+                Adicione sua primeira conta para começar a gerenciar suas
+                finanças
               </p>
             </CardContent>
           </Card>
@@ -359,7 +441,8 @@ export default function Contas() {
                     </div>
                   </div>
                   <CardDescription className="capitalize">
-                    {conta.tipo.replace('_', ' ')} {conta.banco && `• ${conta.banco}`}
+                    {conta.tipo.replace('_', ' ')}{' '}
+                    {conta.banco && `• ${conta.banco}`}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -368,17 +451,23 @@ export default function Contas() {
                       <span className="text-sm text-muted-foreground">
                         {conta.tipo === 'credito' ? 'Fatura Atual' : 'Saldo'}
                       </span>
-                      <span className={`font-semibold ${
-                        conta.saldo >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
+                      <span
+                        className={`font-semibold ${
+                          conta.saldo >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}
+                      >
                         {formatCurrency(conta.saldo)}
                       </span>
                     </div>
-                    
+
                     {conta.tipo === 'credito' && conta.limite_credito && (
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Limite</span>
-                        <span className="text-sm">{formatCurrency(conta.limite_credito)}</span>
+                        <span className="text-sm text-muted-foreground">
+                          Limite
+                        </span>
+                        <span className="text-sm">
+                          {formatCurrency(conta.limite_credito)}
+                        </span>
                       </div>
                     )}
                   </div>

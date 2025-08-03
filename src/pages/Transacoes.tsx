@@ -3,16 +3,50 @@ import { useAuth } from '@/hooks/useAuth';
 import { useCasal } from '@/hooks/useCasal';
 import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { LoadingCard, LoadingButton } from '@/components/ui/loading';
 import { toast } from 'sonner';
-import { Heart, LogOut, Plus, TrendingUp, TrendingDown, Calendar, DollarSign, Trash2, Edit } from 'lucide-react';
+import {
+  Heart,
+  LogOut,
+  Plus,
+  TrendingUp,
+  TrendingDown,
+  Calendar,
+  DollarSign,
+  Trash2,
+  Edit,
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  transacaoSchema,
+  type TransacaoFormData,
+} from '@/lib/validations/transacao';
 
 interface Transacao {
   id: string;
@@ -51,6 +85,7 @@ export default function Transacoes() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [contas, setContas] = useState<Conta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -61,7 +96,7 @@ export default function Transacoes() {
     categoria_id: '',
     conta_id: '',
     recorrente: false,
-    frequencia_recorrencia: ''
+    frequencia_recorrencia: '',
   });
 
   if (!user) {
@@ -79,7 +114,10 @@ export default function Transacoes() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => window.location.href = '/dashboard'} className="w-full">
+            <Button
+              onClick={() => (window.location.href = '/dashboard')}
+              className="w-full"
+            >
               Voltar ao Dashboard
             </Button>
           </CardContent>
@@ -94,17 +132,19 @@ export default function Transacoes() {
 
   const fetchData = async () => {
     if (!casal?.id) return;
-    
+
     setLoading(true);
     try {
       // Fetch transactions
       const { data: transacoesData, error: transacoesError } = await supabase
         .from('transacoes')
-        .select(`
+        .select(
+          `
           *,
           categorias:categoria_id(nome, cor, icone),
           contas:conta_id(nome, tipo)
-        `)
+        `,
+        )
         .eq('casal_id', casal.id)
         .order('data_transacao', { ascending: false });
 
@@ -139,26 +179,42 @@ export default function Transacoes() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!casal?.id || !formData.descricao || !formData.valor || !formData.categoria_id || !formData.conta_id) {
-      toast.error('Preencha todos os campos obrigatórios');
+    setSubmitting(true);
+
+    // Validar dados com Zod
+    const validationResult = transacaoSchema.safeParse(formData);
+
+    if (!validationResult.success) {
+      const errors = validationResult.error.errors;
+      const firstError = errors[0];
+      toast.error(firstError.message);
+      setSubmitting(false);
+      return;
+    }
+
+    if (!casal?.id) {
+      toast.error('Erro: Casal não encontrado');
+      setSubmitting(false);
       return;
     }
 
     try {
-      const { error } = await supabase
-        .from('transacoes')
-        .insert({
-          descricao: formData.descricao,
-          valor: parseFloat(formData.valor),
-          tipo: formData.tipo,
-          data_transacao: formData.data_transacao,
-          categoria_id: formData.categoria_id,
-          conta_id: formData.conta_id,
-          user_id: user.id,
-          casal_id: casal.id,
-          recorrente: formData.recorrente,
-          frequencia_recorrencia: formData.recorrente ? formData.frequencia_recorrencia : null
-        });
+      const validatedData = validationResult.data;
+
+      const { error } = await supabase.from('transacoes').insert({
+        descricao: validatedData.descricao,
+        valor: parseFloat(validatedData.valor),
+        tipo: validatedData.tipo,
+        data_transacao: validatedData.data_transacao,
+        categoria_id: validatedData.categoria_id,
+        conta_id: validatedData.conta_id,
+        user_id: user.id,
+        casal_id: casal.id,
+        recorrente: validatedData.recorrente,
+        frequencia_recorrencia: validatedData.recorrente
+          ? validatedData.frequencia_recorrencia
+          : null,
+      });
 
       if (error) throw error;
 
@@ -172,20 +228,19 @@ export default function Transacoes() {
         categoria_id: '',
         conta_id: '',
         recorrente: false,
-        frequencia_recorrencia: ''
+        frequencia_recorrencia: '',
       });
       fetchData();
     } catch (error: any) {
       toast.error('Erro ao adicionar transação: ' + error.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const deleteTransacao = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('transacoes')
-        .delete()
-        .eq('id', id);
+      const { error } = await supabase.from('transacoes').delete().eq('id', id);
 
       if (error) throw error;
       toast.success('Transação excluída com sucesso!');
@@ -198,7 +253,7 @@ export default function Transacoes() {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
-      currency: 'BRL'
+      currency: 'BRL',
     }).format(value);
   };
 
@@ -206,7 +261,9 @@ export default function Transacoes() {
     return new Intl.DateTimeFormat('pt-BR').format(new Date(date));
   };
 
-  const filteredCategorias = categorias.filter(cat => cat.tipo === formData.tipo);
+  const filteredCategorias = categorias.filter(
+    (cat) => cat.tipo === formData.tipo,
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -217,12 +274,20 @@ export default function Transacoes() {
             <Heart className="h-6 w-6 text-primary" />
             <h1 className="text-xl font-bold">CasalFinance</h1>
           </div>
-          
+
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => window.location.href = '/dashboard'}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => (window.location.href = '/dashboard')}
+            >
               Dashboard
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => window.location.href = '/contas'}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => (window.location.href = '/contas')}
+            >
               Contas
             </Button>
             <span className="text-sm text-muted-foreground">
@@ -246,7 +311,7 @@ export default function Transacoes() {
                 Gerencie suas receitas e despesas
               </p>
             </div>
-            
+
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -264,7 +329,16 @@ export default function Transacoes() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="tipo">Tipo</Label>
-                    <Select value={formData.tipo} onValueChange={(value: 'receita' | 'despesa') => setFormData({ ...formData, tipo: value, categoria_id: '' })}>
+                    <Select
+                      value={formData.tipo}
+                      onValueChange={(value: 'receita' | 'despesa') =>
+                        setFormData({
+                          ...formData,
+                          tipo: value,
+                          categoria_id: '',
+                        })
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -280,7 +354,9 @@ export default function Transacoes() {
                     <Input
                       id="descricao"
                       value={formData.descricao}
-                      onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, descricao: e.target.value })
+                      }
                       placeholder="Ex: Salário, Supermercado..."
                       required
                     />
@@ -293,7 +369,9 @@ export default function Transacoes() {
                       type="number"
                       step="0.01"
                       value={formData.valor}
-                      onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, valor: e.target.value })
+                      }
                       placeholder="0,00"
                       required
                     />
@@ -301,7 +379,12 @@ export default function Transacoes() {
 
                   <div className="space-y-2">
                     <Label htmlFor="categoria">Categoria</Label>
-                    <Select value={formData.categoria_id} onValueChange={(value) => setFormData({ ...formData, categoria_id: value })}>
+                    <Select
+                      value={formData.categoria_id}
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, categoria_id: value })
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione uma categoria" />
                       </SelectTrigger>
@@ -317,7 +400,12 @@ export default function Transacoes() {
 
                   <div className="space-y-2">
                     <Label htmlFor="conta">Conta</Label>
-                    <Select value={formData.conta_id} onValueChange={(value) => setFormData({ ...formData, conta_id: value })}>
+                    <Select
+                      value={formData.conta_id}
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, conta_id: value })
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione uma conta" />
                       </SelectTrigger>
@@ -337,14 +425,24 @@ export default function Transacoes() {
                       id="data"
                       type="date"
                       value={formData.data_transacao}
-                      onChange={(e) => setFormData({ ...formData, data_transacao: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          data_transacao: e.target.value,
+                        })
+                      }
                       required
                     />
                   </div>
 
-                  <Button type="submit" className="w-full">
+                  <LoadingButton
+                    type="submit"
+                    className="w-full"
+                    loading={submitting}
+                    loadingText="Adicionando transação..."
+                  >
                     Adicionar Transação
-                  </Button>
+                  </LoadingButton>
                 </form>
               </DialogContent>
             </Dialog>
@@ -354,21 +452,16 @@ export default function Transacoes() {
           {loading ? (
             <div className="space-y-4">
               {[...Array(5)].map((_, i) => (
-                <Card key={i}>
-                  <CardContent className="p-4">
-                    <div className="animate-pulse space-y-2">
-                      <div className="h-4 bg-muted rounded w-1/4"></div>
-                      <div className="h-4 bg-muted rounded w-1/2"></div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <LoadingCard key={i} size="md" lines={2} />
               ))}
             </div>
           ) : transacoes.length === 0 ? (
             <Card>
               <CardContent className="p-8 text-center">
                 <DollarSign className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Nenhuma transação encontrada</h3>
+                <h3 className="text-lg font-semibold mb-2">
+                  Nenhuma transação encontrada
+                </h3>
                 <p className="text-muted-foreground mb-4">
                   Comece registrando sua primeira transação
                 </p>
@@ -389,11 +482,23 @@ export default function Transacoes() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className={`p-2 rounded-full ${transacao.tipo === 'receita' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                          {transacao.tipo === 'receita' ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                        <div
+                          className={`p-2 rounded-full ${
+                            transacao.tipo === 'receita'
+                              ? 'bg-green-100 text-green-600'
+                              : 'bg-red-100 text-red-600'
+                          }`}
+                        >
+                          {transacao.tipo === 'receita' ? (
+                            <TrendingUp className="h-4 w-4" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4" />
+                          )}
                         </div>
                         <div>
-                          <h3 className="font-semibold">{transacao.descricao}</h3>
+                          <h3 className="font-semibold">
+                            {transacao.descricao}
+                          </h3>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <span>{transacao.categorias?.nome}</span>
                             <span>•</span>
@@ -404,11 +509,18 @@ export default function Transacoes() {
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-2">
                         <div className="text-right">
-                          <div className={`font-bold ${transacao.tipo === 'receita' ? 'text-green-600' : 'text-red-600'}`}>
-                            {transacao.tipo === 'receita' ? '+' : '-'}{formatCurrency(transacao.valor)}
+                          <div
+                            className={`font-bold ${
+                              transacao.tipo === 'receita'
+                                ? 'text-green-600'
+                                : 'text-red-600'
+                            }`}
+                          >
+                            {transacao.tipo === 'receita' ? '+' : '-'}
+                            {formatCurrency(transacao.valor)}
                           </div>
                           {transacao.recorrente && (
                             <Badge variant="secondary" className="text-xs">
