@@ -43,7 +43,7 @@ export function useContas() {
         return {
           ...conta,
           tipo: conta.tipo as 'corrente' | 'poupanca' | 'cartao',
-          saldo_atual: Number((conta as any).saldo_inicial || conta.saldo || 0) + saldoTransacoes
+          saldo_atual: Number(conta.saldo_inicial || 0) + saldoTransacoes
         } as Conta;
       });
 

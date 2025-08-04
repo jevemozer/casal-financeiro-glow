@@ -18,6 +18,11 @@ import { IncomeChart } from '@/components/charts/IncomeChart';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Filters, type FilterValues } from '@/components/Filters';
+import { 
+  ReportsSummaryCards, 
+  ReportsHeader,
+  ComparisonChart 
+} from '@/components/reports';
 
 export default function Relatorios() {
   const { user } = useAuth();
@@ -50,21 +55,37 @@ export default function Relatorios() {
     }).format(value);
   };
 
+  const handleExportPDF = () => {
+    // TODO: Implementar exportação para PDF
+    console.log('Exportando para PDF...');
+  };
+
+  const handleExportExcel = () => {
+    // TODO: Implementar exportação para Excel
+    console.log('Exportando para Excel...');
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleShare = () => {
+    // TODO: Implementar compartilhamento
+    console.log('Compartilhando relatório...');
+  };
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="container mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Relatórios Financeiros</h1>
-            {filters.startDate && filters.endDate && (
-              <p className="text-muted-foreground">
-                {format(new Date(filters.startDate), "d 'de' MMMM", { locale: ptBR })} -{' '}
-                {format(new Date(filters.endDate), "d 'de' MMMM 'de' yyyy", { locale: ptBR })}
-              </p>
-            )}
-          </div>
-        </div>
+        <ReportsHeader
+          startDate={filters.startDate ? filters.startDate.toISOString() : undefined}
+          endDate={filters.endDate ? filters.endDate.toISOString() : undefined}
+          onExportPDF={handleExportPDF}
+          onExportExcel={handleExportExcel}
+          onPrint={handlePrint}
+          onShare={handleShare}
+        />
 
         {/* Filtros */}
         <Card>
@@ -87,89 +108,10 @@ export default function Relatorios() {
         </Card>
 
         {/* Cards de Resumo */}
-        <div className="grid gap-6 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Receitas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {data.loading ? (
-                <Skeleton className="h-7 w-[120px]" />
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">
-                    {formatCurrency(data.summary.totalReceitas)}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Total no período selecionado
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Despesas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {data.loading ? (
-                <Skeleton className="h-7 w-[120px]" />
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">
-                    {formatCurrency(data.summary.totalDespesas)}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Total no período selecionado
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Saldo</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {data.loading ? (
-                <Skeleton className="h-7 w-[120px]" />
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">
-                    {formatCurrency(data.summary.saldoAtual)}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Receitas - Despesas
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Crescimento Mensal
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {data.loading ? (
-                <Skeleton className="h-7 w-[120px]" />
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">
-                    {data.summary.crescimentoMensal.toFixed(1)}%
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Em relação ao mês anterior
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        <ReportsSummaryCards 
+          data={data.summary} 
+          loading={data.loading} 
+        />
 
         {/* Gráficos */}
         <div className="grid gap-6 md:grid-cols-2">
@@ -220,6 +162,26 @@ export default function Relatorios() {
                 <Skeleton className="h-[400px] w-full" />
               ) : (
                 <TrendChart data={data.trends} />
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Comparação Mensal */}
+          <Card className="col-span-2">
+            <CardHeader>
+              <CardTitle>Comparação Mensal</CardTitle>
+              <CardDescription>
+                Compare receitas, despesas e saldo entre diferentes períodos
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {data.loading ? (
+                <Skeleton className="h-[400px] w-full" />
+              ) : (
+                <ComparisonChart 
+                  data={data.trends || []} 
+                  showSaldo={true}
+                />
               )}
             </CardContent>
           </Card>

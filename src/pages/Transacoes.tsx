@@ -172,9 +172,15 @@ export default function Transacoes() {
         tipo: c.tipo as 'receita' | 'despesa',
       }));
 
+      const contasTyped = (contasResult.data || []).map((c: any) => ({
+        ...c,
+        tipo: c.tipo as 'corrente' | 'poupanca' | 'cartao',
+        saldo_atual: c.saldo_inicial || 0,
+      }));
+
       setTransacoes(transacoesTyped);
       setCategorias(categoriasTyped);
-      setContas(contasResult.data || []);
+      setContas(contasTyped);
     } catch (error: unknown) {
       console.error('Erro ao carregar dados:', error);
       toast.error('Erro ao carregar dados');
