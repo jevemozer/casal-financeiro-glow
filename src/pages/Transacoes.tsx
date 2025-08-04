@@ -124,6 +124,9 @@ export default function Transacoes() {
     maxValue: '',
     accounts: [],
     period: 'thisMonth',
+    category: null,
+    sortBy: null,
+    sortOrder: null,
   });
 
   const fetchData = useCallback(async () => {

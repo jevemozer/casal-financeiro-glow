@@ -37,14 +37,22 @@ export type TransferFormData = z.infer<typeof transferFormSchema>;
 
 export interface Conta {
   id: string;
-  user_id: string;
+  casal_id: string;
   nome: string;
   tipo: 'corrente' | 'poupanca' | 'cartao';
-  banco: string;
-  saldo_inicial: number;
-  saldo_atual: number;
-  cor: string;
-  icone: string;
+  banco?: string | null;
+  saldo_inicial?: number;
+  saldo?: number;
+  saldo_atual?: number;
+  limite_credito?: number;
+  cor?: string;
+  icone?: string;
   created_at: string;
   updated_at: string;
+  transacoes?: Array<{
+    id: string;
+    tipo: string;
+    valor: number;
+    data_transacao: string;
+  }>;
 }

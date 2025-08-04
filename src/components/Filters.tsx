@@ -19,23 +19,31 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 
-type TransactionType = 'receita' | 'despesa' | 'poupança';
+type TransactionType = 'receita' | 'despesa' | 'poupança' | 'all';
 type Category = 'alimentação' | 'transporte' | 'lazer' | 'saúde' | 'outros';
 type SortField = 'data' | 'valor' | 'categoria';
 type SortOrder = 'asc' | 'desc';
 
-interface FilterValues {
+export interface FilterValues {
   startDate: Date | null;
   endDate: Date | null;
   type: TransactionType | null;
   category: Category | null;
   sortBy: SortField | null;
   sortOrder: SortOrder | null;
+  categories?: string[];
+  minValue?: string;
+  maxValue?: string;
+  accounts?: string[];
+  period?: 'last30' | 'last90' | 'thisMonth' | 'lastMonth' | 'thisYear' | 'custom';
 }
 
 interface FiltersProps {
   onClose?: () => void;
   onChange?: (filters: FilterValues) => void;
+  onFilterChange?: (values: any) => void;
+  variant?: string;
+  initialValues?: any;
 }
 
 const DEFAULT_FILTERS: FilterValues = {
@@ -45,13 +53,18 @@ const DEFAULT_FILTERS: FilterValues = {
   category: null,
   sortBy: null,
   sortOrder: null,
+  categories: [],
+  minValue: '',
+  maxValue: '',
+  accounts: [],
+  period: 'thisMonth',
 };
 
 const TRANSACTION_TYPES: TransactionType[] = ['receita', 'despesa', 'poupança'];
 const CATEGORIES: Category[] = ['alimentação', 'transporte', 'lazer', 'saúde', 'outros'];
 const SORT_FIELDS: SortField[] = ['data', 'valor', 'categoria'];
 
-export function Filters({ onClose, onChange }: FiltersProps) {
+export function Filters({ onClose, onChange, onFilterChange, variant, initialValues }: FiltersProps) {
   const [filters, setFilters] = useState<FilterValues>(DEFAULT_FILTERS);
 
   const handleFilterChange = useCallback(<T extends keyof FilterValues>(

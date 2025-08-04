@@ -95,8 +95,8 @@ export default function LoadingExample() {
             <LoadingButton
               loading={isSubmitting}
               loadingText="Processando..."
-              variant="outline"
               onClick={handleSimulateLoading}
+              className="border border-input bg-background hover:bg-accent hover:text-accent-foreground"
             >
               Processar
             </LoadingButton>

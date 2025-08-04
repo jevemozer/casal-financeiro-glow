@@ -42,8 +42,9 @@ export function useContas() {
         
         return {
           ...conta,
-          saldo_atual: Number(conta.saldo_inicial) + saldoTransacoes
-        };
+          tipo: conta.tipo as 'corrente' | 'poupanca' | 'cartao',
+          saldo_atual: Number((conta as any).saldo_inicial || conta.saldo || 0) + saldoTransacoes
+        } as Conta;
       });
 
       setContas(contasComSaldo);
@@ -180,7 +181,7 @@ export function useContas() {
     try {
       // Verificar se há saldo suficiente
       const contaOrigem = contas.find(c => c.id === data.conta_origem_id);
-      if (!contaOrigem || contaOrigem.saldo_atual < data.valor) {
+      if (!contaOrigem || (contaOrigem.saldo_atual || 0) < data.valor) {
         throw new Error('Saldo insuficiente para realizar a transferência');
       }
 

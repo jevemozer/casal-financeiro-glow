@@ -26,7 +26,7 @@ const spinnerVariants = cva(
 );
 
 export interface LoadingSpinnerProps
-  extends React.HTMLAttributes<HTMLDivElement>,
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, 'color'>,
     VariantProps<typeof spinnerVariants> {
   text?: string;
 }
@@ -39,7 +39,7 @@ const LoadingSpinner = React.forwardRef<HTMLDivElement, LoadingSpinnerProps>(
         className={cn('flex items-center justify-center gap-2', className)}
         {...props}
       >
-        <div className={cn(spinnerVariants({ size, color }))} />
+        <div className={cn(spinnerVariants({ size, color: color as "default" | "muted" | "white" }))} />
         {text && <span className="text-sm text-muted-foreground">{text}</span>}
       </div>
     );
