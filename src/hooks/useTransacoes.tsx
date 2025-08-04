@@ -1,36 +1,50 @@
-import { useEffect, useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  CreateTransactionInput,
+  UpdateTransactionInput,
+  TransactionFilters,
+} from '@/lib/validations/transacoes';
+import { useToast } from '@/hooks/use-toast';
 import { useCasal } from './useCasal';
 
 interface Transacao {
   id: string;
   descricao: string;
   valor: number;
-  tipo: string;
+  tipo: 'receita' | 'despesa' | 'poupança';
   data_transacao: string;
-  user_id: string;
-  categoria_id: string;
   conta_id: string;
+  categoria_id: string;
+  observacao?: string;
+  comprovante_url?: string;
   recorrente: boolean;
-  frequencia_recorrencia: string | null;
+  frequencia_recorrencia?: string;
   created_at: string;
   updated_at: string;
-  categorias: {
-    nome: string;
-    icone: string;
-    cor: string;
-  } | null;
   contas: {
     nome: string;
   } | null;
+  categorias: {
+    nome: string;
+    cor: string;
+    icone: string;
+  } | null;
 }
 
-export function useTransacoes(limit?: number) {
+interface UseTransacoesReturn {
+  transacoes: Transacao[];
+  loading: boolean;
+  gastosMes: number;
+  refetch: () => Promise<void>;
+}
+
+export function useTransacoes(limit = 10): UseTransacoesReturn {
   const { casal } = useCasal();
   const [transacoes, setTransacoes] = useState<Transacao[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchTransacoes = async () => {
+  const fetchTransacoes = useCallback(async () => {
     if (!casal?.id) {
       setLoading(false);
       return;
@@ -54,17 +68,20 @@ export function useTransacoes(limit?: number) {
       const { data, error } = await query;
 
       if (error) throw error;
-      setTransacoes(data || []);
+      setTransacoes(data?.map(t => ({
+        ...t,
+        tipo: t.tipo as 'receita' | 'despesa' | 'poupança'
+      })) || []);
     } catch (error) {
       console.error('Error fetching transacoes:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [casal?.id, limit]);
 
   useEffect(() => {
     fetchTransacoes();
-  }, [casal?.id, limit]);
+  }, [fetchTransacoes]);
 
   // Calcular gastos do mês atual
   const gastosMes = transacoes

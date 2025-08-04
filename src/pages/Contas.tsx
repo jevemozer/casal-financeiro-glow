@@ -1,17 +1,50 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
-import { Navigate } from 'react-router-dom';
+import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { Navigate } from "react-router-dom";
 import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useContas } from "@/hooks/useContas";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { 
+  Plus, 
+  MoreVertical, 
+  Pencil, 
+  Trash2, 
+  ArrowLeftRight 
+} from "lucide-react";
+import AccountForm from "@/components/forms/AccountForm";
+import TransferForm from "@/components/forms/TransferForm";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -20,22 +53,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Plus,
   CreditCard,
   Wallet,
   ArrowLeft,
-  Pencil,
-  Trash2,
   AlertCircle,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { LoadingButton, LoadingCard } from '@/components/ui/loading';
 import { contaSchema, type ContaFormData } from '@/lib/validations/conta';
 import { cn } from '@/lib/utils';
@@ -51,543 +74,208 @@ interface Conta {
 
 export default function Contas() {
   const { user } = useAuth();
-  const { toast } = useToast();
-  const [contas, setContas] = useState<Conta[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingConta, setEditingConta] = useState<Conta | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [isValidating, setIsValidating] = useState(false);
-
-  const [formData, setFormData] = useState({
-    nome: '',
-    tipo: '',
-    banco: '',
-    saldo: '0',
-    limite_credito: '',
-  });
-
-  useEffect(() => {
-    if (user) {
-      fetchContas();
-    }
-  }, [user]);
+  const { contas, deleteConta, loading } = useContas();
+  const [selectedConta, setSelectedConta] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isAccountFormOpen, setIsAccountFormOpen] = useState(false);
+  const [isTransferFormOpen, setIsTransferFormOpen] = useState(false);
 
   if (!user) {
     return <Navigate to="/auth" replace />;
   }
 
-  const fetchContas = async () => {
-    try {
-      // First get the casal_id from the casais table
-      const { data: casalData, error: casalError } = await supabase
-        .from('casais')
-        .select('id')
-        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-        .single();
-
-      if (casalError || !casalData) {
-        setContas([]);
-        setLoading(false);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('contas')
-        .select('*')
-        .eq('casal_id', casalData.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setContas(data || []);
-    } catch (error) {
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível carregar as contas.',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
+  const handleDelete = async () => {
+    if (selectedConta) {
+      await deleteConta(selectedConta);
+      setIsDeleteDialogOpen(false);
+      setSelectedConta(null);
     }
-  };
-
-  // Validação em tempo real
-  const validateField = (field: string, value: string | number | boolean) => {
-    if (!isValidating) return;
-
-    try {
-      const testData = { ...formData, [field]: value };
-      const result = contaSchema.safeParse(testData);
-
-      if (!result.success) {
-        const fieldError = result.error.errors.find((error) =>
-          error.path.includes(field),
-        );
-        setFieldErrors((prev) => ({
-          ...prev,
-          [field]: fieldError?.message || '',
-        }));
-      } else {
-        setFieldErrors((prev) => {
-          const newErrors = { ...prev };
-          delete newErrors[field];
-          return newErrors;
-        });
-      }
-    } catch (error) {
-      // Ignora erros de validação durante digitação
-    }
-  };
-
-  const handleInputChange = (
-    field: string,
-    value: string | number | boolean,
-  ) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    validateField(field, value);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setIsValidating(true);
-
-    // Limpar erros anteriores
-    setFieldErrors({});
-
-    // Validar dados com Zod
-    const validationResult = contaSchema.safeParse(formData);
-
-    if (!validationResult.success) {
-      const errors = validationResult.error.errors;
-
-      // Mapear erros por campo
-      const newFieldErrors: Record<string, string> = {};
-      errors.forEach((error) => {
-        const field = error.path[0] as string;
-        newFieldErrors[field] = error.message;
-      });
-
-      setFieldErrors(newFieldErrors);
-
-      // Mostrar primeiro erro como toast
-      const firstError = errors[0];
-      toast({
-        title: 'Erro de Validação',
-        description: firstError.message,
-        variant: 'destructive',
-      });
-
-      setSubmitting(false);
-      return;
-    }
-
-    try {
-      // Get casal_id
-      const { data: casalData, error: casalError } = await supabase
-        .from('casais')
-        .select('id')
-        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-        .single();
-
-      if (casalError || !casalData) {
-        toast({
-          title: 'Erro',
-          description: 'Você precisa estar conectado a um parceiro primeiro.',
-          variant: 'destructive',
-        });
-        setSubmitting(false);
-        return;
-      }
-
-      const validatedData = validationResult.data;
-      const contaData = {
-        nome: validatedData.nome,
-        tipo: validatedData.tipo,
-        banco: validatedData.banco || null,
-        saldo: parseFloat(validatedData.saldo) || 0,
-        limite_credito: validatedData.limite_credito
-          ? parseFloat(validatedData.limite_credito)
-          : null,
-        casal_id: casalData.id,
-      };
-
-      if (editingConta) {
-        const { error } = await supabase
-          .from('contas')
-          .update(contaData)
-          .eq('id', editingConta.id);
-
-        if (error) throw error;
-
-        toast({
-          title: 'Sucesso',
-          description: 'Conta atualizada com sucesso!',
-        });
-      } else {
-        const { error } = await supabase.from('contas').insert([contaData]);
-
-        if (error) throw error;
-
-        toast({
-          title: 'Sucesso',
-          description: 'Conta adicionada com sucesso!',
-        });
-      }
-
-      setFormData({
-        nome: '',
-        tipo: '',
-        banco: '',
-        saldo: '0',
-        limite_credito: '',
-      });
-      setEditingConta(null);
-      setIsDialogOpen(false);
-      setFieldErrors({});
-      fetchContas();
-    } catch (error) {
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível salvar a conta.',
-        variant: 'destructive',
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleEdit = (conta: Conta) => {
-    setEditingConta(conta);
-    setFormData({
-      nome: conta.nome,
-      tipo: conta.tipo,
-      banco: conta.banco || '',
-      saldo: conta.saldo.toString(),
-      limite_credito: conta.limite_credito?.toString() || '',
-    });
-    setIsDialogOpen(true);
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta conta?')) return;
-
-    try {
-      const { error } = await supabase.from('contas').delete().eq('id', id);
-
-      if (error) throw error;
-
-      toast({
-        title: 'Sucesso',
-        description: 'Conta excluída com sucesso!',
-      });
-
-      fetchContas();
-    } catch (error) {
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível excluir a conta.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      nome: '',
-      tipo: '',
-      banco: '',
-      saldo: '0',
-      limite_credito: '',
-    });
-    setEditingConta(null);
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
     }).format(value);
   };
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-4 mb-6">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => window.history.back()}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold">Contas</h1>
-            <p className="text-muted-foreground">
-              Gerencie suas contas bancárias e cartões
-            </p>
-          </div>
+    <div className="container max-w-7xl mx-auto p-4">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Minhas Contas</h1>
+          <p className="text-muted-foreground">
+            Gerencie suas contas bancárias e cartões
+          </p>
         </div>
 
-        <div className="flex justify-between items-center mb-6">
-          <div className="text-sm text-muted-foreground">
-            {contas.length} conta{contas.length !== 1 ? 's' : ''} cadastrada
-            {contas.length !== 1 ? 's' : ''}
-          </div>
+        <div className="flex items-center gap-4">
+          <Dialog open={isTransferFormOpen} onOpenChange={setIsTransferFormOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <ArrowLeftRight className="h-4 w-4 mr-2" />
+                Transferir
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Transferência entre Contas</DialogTitle>
+                <DialogDescription>
+                  Realize transferências entre suas contas
+                </DialogDescription>
+              </DialogHeader>
+              <TransferForm onSuccess={() => setIsTransferFormOpen(false)} />
+            </DialogContent>
+          </Dialog>
 
-          <Dialog
-            open={isDialogOpen}
-            onOpenChange={(open) => {
-              setIsDialogOpen(open);
-              if (!open) resetForm();
-            }}
-          >
+          <Dialog open={isAccountFormOpen} onOpenChange={setIsAccountFormOpen}>
             <DialogTrigger asChild>
               <Button>
-                <Plus className="mr-2 h-4 w-4" />
+                <Plus className="h-4 w-4 mr-2" />
                 Nova Conta
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>
-                  {editingConta ? 'Editar Conta' : 'Nova Conta'}
-                </DialogTitle>
+                <DialogTitle>Nova Conta</DialogTitle>
+                <DialogDescription>
+                  Adicione uma nova conta bancária ou cartão
+                </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="nome">Nome da Conta</Label>
-                  <Input
-                    id="nome"
-                    value={formData.nome}
-                    onChange={(e) => handleInputChange('nome', e.target.value)}
-                    placeholder="Ex: Conta Corrente Nubank"
-                    required
-                    className={cn(
-                      fieldErrors.nome &&
-                        'border-destructive focus:ring-destructive',
-                    )}
-                  />
-                  {fieldErrors.nome && (
-                    <div className="flex items-center gap-1 text-sm text-destructive">
-                      <AlertCircle className="h-3 w-3" />
-                      {fieldErrors.nome}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="tipo">Tipo</Label>
-                  <Select
-                    value={formData.tipo}
-                    onValueChange={(value) => handleInputChange('tipo', value)}
-                    required
-                  >
-                    <SelectTrigger
-                      className={cn(
-                        fieldErrors.tipo &&
-                          'border-destructive focus:ring-destructive',
-                      )}
-                    >
-                      <SelectValue placeholder="Selecione o tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="corrente">Conta Corrente</SelectItem>
-                      <SelectItem value="poupanca">Poupança</SelectItem>
-                      <SelectItem value="credito">Cartão de Crédito</SelectItem>
-                      <SelectItem value="investimento">Investimento</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {fieldErrors.tipo && (
-                    <div className="flex items-center gap-1 text-sm text-destructive">
-                      <AlertCircle className="h-3 w-3" />
-                      {fieldErrors.tipo}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="banco">Banco</Label>
-                  <Input
-                    id="banco"
-                    value={formData.banco}
-                    onChange={(e) => handleInputChange('banco', e.target.value)}
-                    placeholder="Ex: Nubank, Itaú, Bradesco..."
-                    className={cn(
-                      fieldErrors.banco &&
-                        'border-destructive focus:ring-destructive',
-                    )}
-                  />
-                  {fieldErrors.banco && (
-                    <div className="flex items-center gap-1 text-sm text-destructive">
-                      <AlertCircle className="h-3 w-3" />
-                      {fieldErrors.banco}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="saldo">Saldo Atual</Label>
-                  <Input
-                    id="saldo"
-                    type="number"
-                    step="0.01"
-                    value={formData.saldo}
-                    onChange={(e) => handleInputChange('saldo', e.target.value)}
-                    placeholder="0.00"
-                    className={cn(
-                      fieldErrors.saldo &&
-                        'border-destructive focus:ring-destructive',
-                    )}
-                  />
-                  {fieldErrors.saldo && (
-                    <div className="flex items-center gap-1 text-sm text-destructive">
-                      <AlertCircle className="h-3 w-3" />
-                      {fieldErrors.saldo}
-                    </div>
-                  )}
-                </div>
-
-                {formData.tipo === 'credito' && (
-                  <div>
-                    <Label htmlFor="limite_credito">Limite de Crédito</Label>
-                    <Input
-                      id="limite_credito"
-                      type="number"
-                      step="0.01"
-                      value={formData.limite_credito}
-                      onChange={(e) =>
-                        handleInputChange('limite_credito', e.target.value)
-                      }
-                      placeholder="0.00"
-                      className={cn(
-                        fieldErrors.limite_credito &&
-                          'border-destructive focus:ring-destructive',
-                      )}
-                    />
-                    {fieldErrors.limite_credito && (
-                      <div className="flex items-center gap-1 text-sm text-destructive">
-                        <AlertCircle className="h-3 w-3" />
-                        {fieldErrors.limite_credito}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex gap-2">
-                  <LoadingButton
-                    type="submit"
-                    className="flex-1"
-                    loading={submitting}
-                    loadingText="Salvando..."
-                    disabled={Object.keys(fieldErrors).length > 0}
-                  >
-                    {editingConta ? 'Atualizar' : 'Adicionar'}
-                  </LoadingButton>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsDialogOpen(false)}
-                    disabled={submitting}
-                  >
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
+              <AccountForm onSuccess={() => setIsAccountFormOpen(false)} />
             </DialogContent>
           </Dialog>
         </div>
-
-        {loading ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <LoadingCard key={i} size="md" lines={3} />
-            ))}
-          </div>
-        ) : contas.length === 0 ? (
-          <Card className="text-center py-8">
-            <CardContent className="pt-6">
-              <Wallet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">
-                Nenhuma conta cadastrada
-              </h3>
-              <p className="text-muted-foreground mb-4">
-                Adicione sua primeira conta para começar a gerenciar suas
-                finanças
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {contas.map((conta) => (
-              <Card key={conta.id} className="relative">
-                <CardHeader className="pb-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      {conta.tipo === 'credito' ? (
-                        <CreditCard className="h-5 w-5" />
-                      ) : (
-                        <Wallet className="h-5 w-5" />
-                      )}
-                      <CardTitle className="text-lg">{conta.nome}</CardTitle>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleEdit(conta)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(conta.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  <CardDescription className="capitalize">
-                    {conta.tipo.replace('_', ' ')}{' '}
-                    {conta.banco && `• ${conta.banco}`}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">
-                        {conta.tipo === 'credito' ? 'Fatura Atual' : 'Saldo'}
-                      </span>
-                      <span
-                        className={`font-semibold ${
-                          conta.saldo >= 0 ? 'text-green-600' : 'text-red-600'
-                        }`}
-                      >
-                        {formatCurrency(conta.saldo)}
-                      </span>
-                    </div>
-
-                    {conta.tipo === 'credito' && conta.limite_credito && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">
-                          Limite
-                        </span>
-                        <span className="text-sm">
-                          {formatCurrency(conta.limite_credito)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
       </div>
+
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((n) => (
+            <Card key={n} className="animate-pulse">
+              <CardHeader className="h-24 bg-gray-100 rounded-t-lg" />
+              <CardContent className="p-4 space-y-2">
+                <div className="h-4 bg-gray-100 rounded w-3/4" />
+                <div className="h-4 bg-gray-100 rounded w-1/2" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {contas.map((conta) => (
+            <Card key={conta.id} className="relative group">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xl"
+                      style={{ backgroundColor: conta.cor }}
+                    >
+                      {conta.icone}
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">{conta.nome}</CardTitle>
+                      <CardDescription>{conta.banco}</CardDescription>
+                    </div>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Editar
+                          </DropdownMenuItem>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Editar Conta</DialogTitle>
+                            <DialogDescription>
+                              Modifique os detalhes da sua conta
+                            </DialogDescription>
+                          </DialogHeader>
+                          <AccountForm
+                            accountId={conta.id}
+                            defaultValues={{
+                              nome: conta.nome,
+                              tipo: conta.tipo as 'corrente' | 'poupanca' | 'cartao',
+                              banco: conta.banco,
+                              saldo_inicial: conta.saldo_inicial,
+                              cor: conta.cor,
+                              icone: conta.icone,
+                            }}
+                          />
+                        </DialogContent>
+                      </Dialog>
+                      <DropdownMenuItem
+                        className="text-red-600"
+                        onClick={() => {
+                          setSelectedConta(conta.id);
+                          setIsDeleteDialogOpen(true);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Excluir
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Saldo Atual</p>
+                    <p className="text-2xl font-bold">
+                      {formatCurrency(conta.saldo_atual)}
+                    </p>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {conta.tipo === "cartao"
+                      ? "Fatura Atual"
+                      : "Saldo Disponível"}
+                  </p>
+                </div>
+              </CardContent>
+              <CardFooter className="border-t pt-4">
+                <Button variant="ghost" className="w-full text-sm" onClick={() => {}}>
+                  Ver Extrato
+                </Button>
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. A conta será permanentemente
+              excluída.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSelectedConta(null)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

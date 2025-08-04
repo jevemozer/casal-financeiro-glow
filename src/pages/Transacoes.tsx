@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCasal } from '@/hooks/useCasal';
 import { Navigate } from 'react-router-dom';
@@ -49,6 +49,7 @@ import {
   type TransacaoFormData,
 } from '@/lib/validations/transacao';
 import { cn } from '@/lib/utils';
+import { Filters, type FilterValues } from '@/components/Filters';
 
 interface Transacao {
   id: string;
@@ -61,6 +62,7 @@ interface Transacao {
   user_id: string;
   recorrente: boolean;
   frequencia_recorrencia: string | null;
+  casal_id: string;
   categorias: { nome: string; cor: string; icone: string } | null;
   contas: { nome: string; tipo: string } | null;
 }
@@ -71,6 +73,7 @@ interface Categoria {
   tipo: 'receita' | 'despesa';
   cor: string;
   icone: string;
+  casal_id: string;
 }
 
 interface Conta {
@@ -78,7 +81,18 @@ interface Conta {
   nome: string;
   tipo: string;
   saldo: number;
+  casal_id: string;
 }
+
+interface APITransacao extends Omit<Transacao, 'tipo'> {
+  tipo: string;
+}
+
+interface APICategoria extends Omit<Categoria, 'tipo'> {
+  tipo: string;
+}
+
+type ValueType = string | number | boolean;
 
 export default function Transacoes() {
   const { user, signOut } = useAuth();
@@ -91,17 +105,181 @@ export default function Transacoes() {
   const [open, setOpen] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isValidating, setIsValidating] = useState(false);
-
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<TransacaoFormData>({
     descricao: '',
     valor: '',
-    tipo: 'despesa' as 'receita' | 'despesa',
+    tipo: 'despesa',
     data_transacao: new Date().toISOString().split('T')[0],
     categoria_id: '',
     conta_id: '',
     recorrente: false,
     frequencia_recorrencia: '',
   });
+  const [activeFilters, setActiveFilters] = useState<FilterValues>({
+    startDate: null,
+    endDate: null,
+    categories: [],
+    type: 'all',
+    minValue: '',
+    maxValue: '',
+    accounts: [],
+    period: 'thisMonth',
+  });
+
+  const fetchData = useCallback(async () => {
+    if (!casal?.id) return;
+
+    try {
+      setLoading(true);
+      const [transacoesResult, categoriasResult, contasResult] = await Promise.all([
+        supabase
+          .from('transacoes')
+          .select(`
+            *,
+            categorias:categoria_id(nome, cor, icone),
+            contas:conta_id(nome, tipo)
+          `)
+          .eq('casal_id', casal.id)
+          .order('data_transacao', { ascending: false }),
+        
+        supabase
+          .from('categorias')
+          .select('*')
+          .eq('casal_id', casal.id)
+          .order('nome'),
+        
+        supabase
+          .from('contas')
+          .select('*')
+          .eq('casal_id', casal.id)
+          .order('nome')
+      ]);
+
+      if (transacoesResult.error) throw transacoesResult.error;
+      if (categoriasResult.error) throw categoriasResult.error;
+      if (contasResult.error) throw contasResult.error;
+
+      const transacoesTyped = (transacoesResult.data || []).map((t: APITransacao) => ({
+        ...t,
+        tipo: t.tipo as 'receita' | 'despesa',
+      }));
+
+      const categoriasTyped = (categoriasResult.data || []).map((c: APICategoria) => ({
+        ...c,
+        tipo: c.tipo as 'receita' | 'despesa',
+      }));
+
+      setTransacoes(transacoesTyped);
+      setCategorias(categoriasTyped);
+      setContas(contasResult.data || []);
+    } catch (error: unknown) {
+      console.error('Erro ao carregar dados:', error);
+      toast.error('Erro ao carregar dados');
+    } finally {
+      setLoading(false);
+    }
+  }, [casal?.id]);
+
+  useEffect(() => {
+    if (casal?.id) {
+      fetchData();
+    }
+  }, [casal?.id, fetchData]);
+
+  const filteredTransacoes = useMemo(() => {
+    return transacoes.filter((transacao) => {
+      if (!transacao) return false;
+
+      if (activeFilters.type !== 'all' && transacao.tipo !== activeFilters.type) {
+        return false;
+      }
+
+      if (
+        activeFilters.categories.length > 0 &&
+        !activeFilters.categories.includes(transacao.categoria_id)
+      ) {
+        return false;
+      }
+
+      if (
+        activeFilters.accounts.length > 0 &&
+        !activeFilters.accounts.includes(transacao.conta_id)
+      ) {
+        return false;
+      }
+
+      if (
+        activeFilters.minValue &&
+        transacao.valor < parseFloat(activeFilters.minValue)
+      ) {
+        return false;
+      }
+
+      if (
+        activeFilters.maxValue &&
+        transacao.valor > parseFloat(activeFilters.maxValue)
+      ) {
+        return false;
+      }
+
+      const transacaoDate = new Date(transacao.data_transacao);
+      const today = new Date();
+
+      switch (activeFilters.period) {
+        case 'thisMonth': {
+          const startOfMonth = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            1
+          );
+          const endOfMonth = new Date(
+            today.getFullYear(),
+            today.getMonth() + 1,
+            0
+          );
+          return transacaoDate >= startOfMonth && transacaoDate <= endOfMonth;
+        }
+        case 'lastMonth': {
+          const startOfLastMonth = new Date(
+            today.getFullYear(),
+            today.getMonth() - 1,
+            1
+          );
+          const endOfLastMonth = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            0
+          );
+          return (
+            transacaoDate >= startOfLastMonth && transacaoDate <= endOfLastMonth
+          );
+        }
+        case 'thisYear': {
+          const startOfYear = new Date(today.getFullYear(), 0, 1);
+          const endOfYear = new Date(today.getFullYear(), 11, 31);
+          return transacaoDate >= startOfYear && transacaoDate <= endOfYear;
+        }
+        case 'custom': {
+          const startDate = activeFilters.startDate
+            ? new Date(activeFilters.startDate)
+            : null;
+          const endDate = activeFilters.endDate
+            ? new Date(activeFilters.endDate)
+            : null;
+
+          if (startDate && endDate) {
+            return transacaoDate >= startDate && transacaoDate <= endDate;
+          }
+        }
+        default:
+          return true;
+      }
+    });
+  }, [transacoes, activeFilters]);
+
+  const filteredCategorias = useMemo(() => {
+    return categorias.filter((categoria) => categoria.tipo === formData.tipo);
+  }, [categorias, formData.tipo]);
 
   if (!user) {
     return <Navigate to="/auth" replace />;
@@ -130,59 +308,8 @@ export default function Transacoes() {
     );
   }
 
-  useEffect(() => {
-    fetchData();
-  }, [casal]);
-
-  const fetchData = async () => {
-    if (!casal?.id) return;
-
-    setLoading(true);
-    try {
-      // Fetch transactions
-      const { data: transacoesData, error: transacoesError } = await supabase
-        .from('transacoes')
-        .select(
-          `
-          *,
-          categorias:categoria_id(nome, cor, icone),
-          contas:conta_id(nome, tipo)
-        `,
-        )
-        .eq('casal_id', casal.id)
-        .order('data_transacao', { ascending: false });
-
-      if (transacoesError) throw transacoesError;
-      setTransacoes((transacoesData || []) as Transacao[]);
-
-      // Fetch categories
-      const { data: categoriasData, error: categoriasError } = await supabase
-        .from('categorias')
-        .select('*')
-        .eq('casal_id', casal.id)
-        .order('nome');
-
-      if (categoriasError) throw categoriasError;
-      setCategorias((categoriasData || []) as Categoria[]);
-
-      // Fetch accounts
-      const { data: contasData, error: contasError } = await supabase
-        .from('contas')
-        .select('*')
-        .eq('casal_id', casal.id)
-        .order('nome');
-
-      if (contasError) throw contasError;
-      setContas(contasData || []);
-    } catch (error: any) {
-      toast.error('Erro ao carregar dados: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Validação em tempo real
-  const validateField = (field: string, value: any) => {
+  const validateField = (field: string, value: ValueType) => {
     if (!isValidating) return;
 
     try {
@@ -209,7 +336,7 @@ export default function Transacoes() {
     }
   };
 
-  const handleInputChange = (field: string, value: any) => {
+  const handleInputChange = (field: string, value: ValueType) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     validateField(field, value);
   };
@@ -314,10 +441,6 @@ export default function Transacoes() {
   const formatDate = (date: string) => {
     return new Intl.DateTimeFormat('pt-BR').format(new Date(date));
   };
-
-  const filteredCategorias = categorias.filter(
-    (cat) => cat.tipo === formData.tipo,
-  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -585,7 +708,22 @@ export default function Transacoes() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {transacoes.map((transacao) => (
+              {/* Filters Component */}
+              <Card>
+                <CardContent className="p-4">
+                  <Filters 
+                    onFilterChange={setActiveFilters} 
+                    variant="transactions"
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Results Counter */}
+              <div className="text-sm text-muted-foreground mb-4">
+                Mostrando {filteredTransacoes.length} de {transacoes.length} transações
+              </div>
+
+              {filteredTransacoes.map((transacao) => (
                 <Card key={transacao.id}>
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
