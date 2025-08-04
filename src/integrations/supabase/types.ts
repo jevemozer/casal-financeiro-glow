@@ -101,33 +101,36 @@ export type Database = {
         Row: {
           banco: string | null
           casal_id: string
+          cor: string
           created_at: string
+          icone: string
           id: string
-          limite_credito: number | null
           nome: string
-          saldo: number
+          saldo_inicial: number
           tipo: string
           updated_at: string
         }
         Insert: {
           banco?: string | null
           casal_id: string
+          cor: string
           created_at?: string
+          icone: string
           id?: string
-          limite_credito?: number | null
           nome: string
-          saldo?: number
+          saldo_inicial?: number
           tipo: string
           updated_at?: string
         }
         Update: {
           banco?: string | null
           casal_id?: string
+          cor?: string
           created_at?: string
+          icone?: string
           id?: string
-          limite_credito?: number | null
           nome?: string
-          saldo?: number
+          saldo_inicial?: number
           tipo?: string
           updated_at?: string
         }
@@ -347,6 +350,20 @@ export type Database = {
     Functions: {
       create_default_categories: {
         Args: { casal_uuid: string }
+        Returns: undefined
+      }
+      realizar_transferencia: {
+        Args: {
+          p_conta_origem_id: string
+          p_conta_destino_id: string
+          p_valor: number
+          p_descricao: string
+          p_casal_id: string
+        }
+        Returns: undefined
+      }
+      set_current_user_id: {
+        Args: Record<PropertyKey, never>
         Returns: undefined
       }
     }
